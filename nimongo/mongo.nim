@@ -1,20 +1,34 @@
-import "strutils"
-import "unsigned"
+import strutils
+import unsigned
+
+import nimongo.bson
 
 type
-    Mongo* = ref object  ## Mongo represents connection to MongoDB server
+    Mongo* = ref object ## Mongo represents connection to MongoDB server
         host: string
         port: uint16
 
-    Database* = ref object
+    Database* = ref object ## MongoDB database object
+        name: string
+
+    Collection* = ref object ## MongoDB collection object
         name: string
 
 proc `$`*(db: Database): string = db.name  ## Database name
 
-proc `[]`*(m: Mongo, db: string): Database =
+proc `[]`*(m: Mongo, dbName: string): Database =
     ## Retrieves database from Mongo
-
     result.new
+    result.name = dbName
+
+proc `[]`*(db: Database, collectionName: string): Collection =
+    ## Retrieves collection from Mongo Database
+    result.new
+    result.name = collectionName
+
+proc insert*(c: Collection, o: table) =
+    discard
+
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     ## Mongo constructor
     result.new

@@ -1,6 +1,9 @@
 import json
 import oids
+import sequtils
 import tables
+
+discard """
 
 type
   BsonType* = distinct byte
@@ -37,15 +40,31 @@ type
     BSMD5             = BsonSubtype(0x05)
     BSUserDefined     = BsonSubtype(0x80)
 
-  Bson* = ref object
-    case kind*: BsonKind
-    of BNull:
-    of BBull: yes*: bool
-    of BNumber: num*: float64
-    of BString: str*: string
-    of BArray: arr*: seq[Bson]
-    of BObject: obj*: Table[string, Bson]
+"""
 
+type Bson = object of RootObj
+
+type BsonString* = object of Bson
+    data: seq[byte]
+
+type BsonDocument* = object of Bson
+    size: int32
+    data: Bson
+
+proc `$`*(bs: BsonString): string =
+    discard
+
+proc `$`*(bs: BsonDocument): string =
+    discard
+
+converter toBsonString*(s: string): BsonString =
+    ## Implicitly converts string to its BSON representation
+    result.data = newSeq[byte](s.len + 1)
+    result.data[0] = 0x02
+    for i in 1 ..< s.len:
+        result.data[i] = s[i].byte
+
+discard """
 proc newBObject*(): Bson =
   result.new
   result.kind = BObject
@@ -74,3 +93,7 @@ proc newBBool*(): Bson =
 proc newBNull*(): Bson =
   result.new
   result.kind = BNull
+"""
+
+when isMainModule:
+    echo "Testing nimongo/bson.nim module..."
