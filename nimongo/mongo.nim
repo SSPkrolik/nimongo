@@ -2,17 +2,28 @@ import "strutils"
 import "unsigned"
 
 type
-  Mongo* = ref object
-    host: string
-    port: uint16
+    Mongo* = ref object  ## Mongo represents connection to MongoDB server
+        host: string
+        port: uint16
 
-proc newMongo(): Mongo =
-  result.new
-  result.host = "127.0.0.1"
-  result.port = 27017
+    Database* = ref object
+        name: string
 
-proc `$`(mongo: Mongo): string =
-  return "mongodb://$#:$#" % [mongo.host, $mongo.port]
+proc `$`*(db: Database): string = db.name  ## Database name
+
+proc `[]`*(m: Mongo, db: string): Database =
+    ## Retrieves database from Mongo
+
+    result.new
+proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
+    ## Mongo constructor
+    result.new
+    result.host = host
+    result.port = port
+
+proc `$`*(m: Mongo): string =
+    ## Return full DSN for the Mongo connection
+    return "mongodb://$#:$#" % [m.host, $m.port]
 
 when isMainModule:
   let unittest = proc(): bool =
