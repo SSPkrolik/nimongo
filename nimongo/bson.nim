@@ -8,18 +8,19 @@ type
     BsonSubtype* = distinct byte
 
     BsonKind* = enum
+        BsonKindDouble          = 0x01.char
         BsonKindStringUTF8      = 0x02.char
+        BsonKindDocument        = 0x03.char
+        BsonKindArray           = 0x04.char
+        BsonKindBool            = 0x08.char
+        BsonKindNull            = 0x0A.char
+        BsonKindInt64           = 0x12.char
 
 discard """
-    BsonKindDouble          = BsonType(0x01)
-    BEDocument        = BsonType(0x03)
-    BEArray           = BsonType(0x04)
     BEBinary          = BsonType(0x05)
     BEUndefined       = BsonType(0x06)
     BEOid             = BsonType(0x07)
-    BEBool            = BsonType(0x08)
     BEDateTimeUTC     = BsonType(0x09)
-    BENull            = BsonType(0x0A)
     BERegexp          = BsonType(0x0B)
     BEDBPointer       = BsonType(0x0C)
     BEJSCode          = BsonType(0x0D)
@@ -27,7 +28,6 @@ discard """
     BEJSCodeWithScope = BsonType(0x0F)
     BEInt32           = BsonType(0x10)
     BETimestamp       = BsonType(0x11)
-    BEInt64           = BsonType(0x12)
     BEMinimumKey      = BsonType(0xFF)
     BEMaximumKey      = BsonType(0x7F)
 """
@@ -52,14 +52,19 @@ type Bson* = object of RootObj
 converter toString(bs: Bson): string =
     return bs.data
 
-type BsonString* = object of Bson
+type BsonString = object of Bson
+type BsonNull = object of Bson
 
 proc `$`*(bs: BsonString): string =
     return $bs.data
 
 type BsonDocument* = ref object of RootObj
     size: int32
+    data: string
     elements: OrderedTableRef[string, Bson]
+
+proc len*(bs: BsonDocument): int =
+    return int(bs.size)
 
 proc newBsonDocument*(): BsonDocument =
     ## Create empty BSON document
@@ -78,6 +83,7 @@ proc `[]`*(bs: BsonDocument, key: string): Bson =
 
 proc `$`*(bs: BsonDocument): string =
     ## Serialize Bson document into byte stream
+    discard """
     let a = cast[array[0..3, char]](bs.size)
     result = ""
     for c in a:
@@ -85,9 +91,53 @@ proc `$`*(bs: BsonDocument): string =
     for key, val in bs.elements.pairs():
         result = result & key & char(0) & val
     result = result & char(0)
+    """
+    return bs.data
 
 converter toBson(s: string): Bson =
     result.data = BsonKindStringUTF8 & s
+
+proc jsonToBson*(j: JsonNode): BsonDocument =
+
+    var finalDoc: BsonDocument = newBsonDocument()
+
+    proc simpleConv(j: JsonNode, name: string = ""): string =
+        if j.kind == JNull:
+            inc(finalDoc.size, 2 + name.len)
+            return BsonKindNull & name & char(0)
+        elif j.kind == JBool:
+            inc(finalDoc.size, 2 + name.len)
+            return BsonKindBool & name & char(0) & (if j.bval: 1.char else: 0.char)
+        elif j.kind == JInt:
+            let
+                num: int64 = int64(j.num)
+                numarr = cast[array[0..7, char]](num)
+            var res: string
+            for c in numarr:
+                res = res & c
+            inc(finalDoc.size, 2 + 8 + name.len)
+            return BsonKindInt64 & name & char(0) & res
+        elif j.kind == JFloat:
+            let
+                fnum = float64(j.fnum)
+                numarr = cast[array[0..7, char]](fnum)
+            var res: string
+            for c in numarr:
+                res = res & c
+            inc(finalDoc.size, 2 + 8 + name.len)
+            return BsonKindDouble & name & char(0) & res
+        elif j.kind == JString:
+            inc(finalDoc.size, 3 + name.len + j.str.len)
+            return BsonKindStringUTF8 & name & char(0) & j.str & char(0)
+        elif j.kind == JObject:
+            for key, jVal in j.pairs():
+                return simpleConv(jVal, key)
+        #elif j.kind == JArray:
+        #    for i, jVal in j:
+        #        return simpleConv(j, key)
+
+    finalDoc.data = simpleConv(j)
+    return finalDoc
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
