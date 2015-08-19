@@ -1,12 +1,15 @@
+import sockets
 import strutils
+import tables
 import unsigned
 
-import nimongo.bson
+import bson
 
 type
     Mongo* = ref object ## Mongo represents connection to MongoDB server
         host: string
         port: uint16
+        sock: Socket
 
     Database* = ref object ## MongoDB database object
         name: string
@@ -26,7 +29,7 @@ proc `[]`*(db: Database, collectionName: string): Collection =
     result.new
     result.name = collectionName
 
-proc insert*(c: Collection, o: table) =
+proc insert*(c: Collection, o: Table) =
     discard
 
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
@@ -34,6 +37,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.new
     result.host = host
     result.port = port
+    result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
 proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
