@@ -33,21 +33,23 @@ converter toChar*(bk: BsonKind): char = bk.char  ## Convert BsonKind to char
 
 # ------------- type: Bson -----------------------#
 
-type Bson* = object of RootObj  ## Bson Node
-    key: string
-    case kind: BsonKind
-    of BsonKindGeneric:    discard
-    of BsonKindDouble:     valueFloat64:  float64
-    of BsonKindStringUTF8: valueString:   string
-    of BsonKindDocument:   valueDocument: seq[Bson]
-    of BsonKindArray:      valueArray:    seq[Bson]
-    of BsonKindBinary:     valueBinary:   cstring
-    of BsonKindUndefined:  discard
-    of BsonKindOid:        valueOid:      Oid
-    of BsonKindBool:       valueBool:     bool
-    of BsonKindNull:       discard
-    of BsonKindInt64:      valueNull:     int64
-    else: discard
+type
+    Bson* = object of RootObj  ## Bson Node
+        key: string
+        size: int32
+        case kind: BsonKind
+        of BsonKindGeneric:    discard
+        of BsonKindDouble:     valueFloat64:  float64
+        of BsonKindStringUTF8: valueString:   string
+        of BsonKindDocument:   valueDocument: seq[Bson]
+        of BsonKindArray:      valueArray:    seq[Bson]
+        of BsonKindBinary:     valueBinary:   cstring
+        of BsonKindUndefined:  discard
+        of BsonKindOid:        valueOid:      Oid
+        of BsonKindBool:       valueBool:     bool
+        of BsonKindNull:       discard
+        of BsonKindInt64:      valueNull:     int64
+        else: discard
 
 converter toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
@@ -64,53 +66,47 @@ proc bson*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & $cast[cstring](bs.valueFloat64) & char(0)
     of BsonKindStringUTF8:
         return bs.kind & bs.key & char(0) & bs.valueString & char(0)
+    of BsonKindDocument:
+        return bs.kind & bs.key & char(0) & join(map(bs.valueDocument, bson), "")
     else:
         raise new(Exception)
 
 proc `$`*(bs: Bson): string =
     ## Serialize Bson document into readable string
+    var ident = ""
     case bs.kind
     of BsonKindDouble:
         return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
     of BsonKindStringUTF8:
         return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
+    of BsonKindDocument:
+        var res: string = "{\n"
+        ident &= "  "
+        for i, item in bs.valueDocument:
+            if i == len(bs.valueDocument) - 1: res = res & ident & $item & "\n"
+            else: res = res & ident & $item & ",\n"
+        ident = ident[0..len(ident) - 2]
+        return res & "}"
     else:
         raise new(Exception)
 
 # ------------- type: BsonDocument ---------------#
 
-type BsonDocument* = object of RootObj  ## Bson top-level document
-    size: int32
-    data: Bson
-
-proc newBsonDocument*(): BsonDocument =
+proc initBsonDocument*(): Bson =
     ## Create new top-level Bson document
-    return BsonDocument(
-        size: 5,
-        data: Bson(
-            key:  "",
-            kind: BsonKindDocument,
-            valueDocument: newSeq[Bson]()
-        )
+    result = Bson(
+        key: "",
+        kind: BsonKindDocument,
+        valueDocument: newSeq[Bson]()
     )
 
-proc `$`*(bs: BsonDocument): string =
-    ## Serialize Bson document into readable string
-    result = "{}"
-
-proc bson*(bs: BsonDocument): string =
-    ## Serialize Bson document into byte-stream suitable for
-    ## sending over the wire to MongoDB server
-    return ""
-
-proc `()`*(bs: BsonDocument, key: string, val: Bson): BsonDocument =
+proc `()`*[T](bs: Bson, key: string, val: T): Bson =
     result = bs
-    var
-        value = val
+    var value: Bson = val
     value.key = key
-    result.data.valueDocument.add(value)
+    result.valueDocument.add(value)
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
-    var bdoc: BsonDocument = newBsonDocument()("balance", 0.0)("name", "John")
+    var bdoc: Bson = initBsonDocument()("balance", 1000.0)("name", "John")
     echo bdoc
