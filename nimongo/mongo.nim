@@ -105,18 +105,20 @@ proc connect(m: Mongo): bool =
 
 proc insert*(c: Collection, doc: JsonNode) =
     ##
+    discard """
     var
         msgHeader = newMongoMessageHeader(0, OP_INSERT)
         bdoc = jsonToBson(doc)
     inc(msgHeader.messageLength, bdoc.len())
 
-    let data: string = `$`(msgHeader) & $bdoc
+    let data: string = `$`(msgHeader)  & $bdoc
 
     if c.client.sock.trySend(data):
         echo "Successfully sent!"
     #var sent: int = 0
     #while sent != msgHeader.messageLength:
     #    inc(sent, c.client.sock.send(addr cstring(data), int(msgHeader.messageLength)))
+    """
 
 proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
