@@ -53,11 +53,17 @@ converter toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
     return Bson(key: "", kind: BsonKindDouble, valueFloat64: x)
 
+converter toBson*(x: string): Bson =
+    ## Convert string to Bson object
+    return Bson(key: "", kind: BsonKindStringUTF8, valueString: x)
+
 proc bson*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
     case bs.kind
     of BsonKindDouble:
         return bs.kind & bs.key & char(0) & $cast[cstring](bs.valueFloat64) & char(0)
+    of BsonKindStringUTF8:
+        return bs.kind & bs.key & char(0) & bs.valueString & char(0)
     else:
         raise new(Exception)
 
@@ -66,6 +72,8 @@ proc `$`*(bs: Bson): string =
     case bs.kind
     of BsonKindDouble:
         return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
+    of BsonKindStringUTF8:
+        return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
     else:
         raise new(Exception)
 
@@ -104,5 +112,5 @@ proc `()`*(bs: BsonDocument, key: string, val: Bson): BsonDocument =
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
-    var bdoc: BsonDocument = newBsonDocument()("balance", 0.0)
+    var bdoc: BsonDocument = newBsonDocument()("balance", 0.0)("name", "John")
     echo bdoc
