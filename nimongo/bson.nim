@@ -109,7 +109,7 @@ proc initBsonDocument*(): Bson =
         valueDocument: newSeq[Bson]()
     )
 
-proc `()`*(bs: Bson, key: string, val: Bson): Bson =
+proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
     ## Add field to bson object
     result = bs
     var value: Bson = val
@@ -118,7 +118,14 @@ proc `()`*(bs: Bson, key: string, val: Bson): Bson =
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
-    var bdoc: Bson = initBsonDocument()("balance", 1000.23)("name", "John")
+    var bdoc: Bson = initBsonDocument()(
+        "balance", 1000.23)(
+        "name", "John")(
+        "surname", "Smith")(
+        "subdoc", initBsonDocument()(
+            "salary", 500.0
+        )
+    )
     echo bdoc
     for i in bdoc.bson():
         stdout.write(ord(i))
