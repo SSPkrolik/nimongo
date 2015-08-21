@@ -59,23 +59,23 @@ converter toBson*(x: string): Bson =
     ## Convert string to Bson object
     return Bson(key: "", kind: BsonKindStringUTF8, valueString: x)
 
-proc bson*(bs: Bson): string =
+proc objToBytes*[T](x: T): string =
+    ## Convert arbitrary data piece into series of bytes
+    let a = toSeq(cast[array[0..3, char]](x).items())
+    return a.mapIt(string, $it).join()
+
+proc bytes*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
     case bs.kind
     of BsonKindDouble:
-        let a = toSeq(cast[array[0..3, char]](bs.valueFloat64).items())
-        return bs.kind & bs.key & char(0) & a.mapIt(string, $it).join() & char(0)
+        return bs.kind & bs.key & char(0) & objToBytes(bs.valueFloat64) & char(0)
     of BsonKindStringUTF8:
         return bs.kind & bs.key & char(0) & bs.valueString & char(0)
     of BsonKindDocument:
         result = ""
-        for val in bs.valueDocument:
-            result = result & bson(val)
+        for val in bs.valueDocument: result = result & bytes(val)
         result = bs.kind & bs.key & char(0) & result
-        let
-            size = len(result) + 4
-            a = toSeq(cast[array[0..3, char]](size).items())
-        result = a.mapIt(string, $it).join() & result
+        result = objToBytes(len(result) + 4) & result
     else:
         raise new(Exception)
 
@@ -130,7 +130,7 @@ when isMainModule:
         )
     )
     echo bdoc
-    for i in bdoc.bson():
+    for i in bdoc.bytes():
         stdout.write(ord(i))
         stdout.write(" ")
     echo ""
