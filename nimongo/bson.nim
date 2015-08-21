@@ -2,6 +2,7 @@ import oids
 import sequtils
 import tables
 import streams
+import sequtils
 import strutils
 
 # ------------- type: BsonKind -------------------#
@@ -36,12 +37,11 @@ converter toChar*(bk: BsonKind): char = bk.char  ## Convert BsonKind to char
 type
     Bson* = object of RootObj  ## Bson Node
         key: string
-        size: int32
         case kind: BsonKind
         of BsonKindGeneric:    discard
-        of BsonKindDouble:     valueFloat64:  float64
-        of BsonKindStringUTF8: valueString:   string
-        of BsonKindDocument:   valueDocument: seq[Bson]
+        of BsonKindDouble:     valueFloat64:  float64    ## +
+        of BsonKindStringUTF8: valueString:   string     ## +
+        of BsonKindDocument:   valueDocument: seq[Bson]  ## +
         of BsonKindArray:      valueArray:    seq[Bson]
         of BsonKindBinary:     valueBinary:   cstring
         of BsonKindUndefined:  discard
@@ -61,13 +61,22 @@ converter toBson*(x: string): Bson =
 
 proc bson*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
+    echo bs
     case bs.kind
     of BsonKindDouble:
-        return bs.kind & bs.key & char(0) & $cast[cstring](bs.valueFloat64) & char(0)
+        let a = toSeq(cast[array[0..3, char]](bs.valueFloat64).items())
+        return bs.kind & bs.key & char(0) & a.mapIt(string, $it).join() & char(0)
     of BsonKindStringUTF8:
         return bs.kind & bs.key & char(0) & bs.valueString & char(0)
     of BsonKindDocument:
-        return bs.kind & bs.key & char(0) & join(map(bs.valueDocument, bson), "")
+        result = ""
+        for val in bs.valueDocument:
+            result = result & bson(val)
+        result = bs.kind & bs.key & char(0) & result
+        let
+            size = len(result) + 4
+            a = toSeq(cast[array[0..3, char]](size).items())
+        result = a.mapIt(string, $it).join() & result
     else:
         raise new(Exception)
 
@@ -100,7 +109,8 @@ proc initBsonDocument*(): Bson =
         valueDocument: newSeq[Bson]()
     )
 
-proc `()`*[T](bs: Bson, key: string, val: T): Bson =
+proc `()`*(bs: Bson, key: string, val: Bson): Bson =
+    ## Add field to bson object
     result = bs
     var value: Bson = val
     value.key = key
@@ -108,5 +118,9 @@ proc `()`*[T](bs: Bson, key: string, val: T): Bson =
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
-    var bdoc: Bson = initBsonDocument()("balance", 1000.0)("name", "John")
+    var bdoc: Bson = initBsonDocument()("balance", 1000.23)("name", "John")
     echo bdoc
+    for i in bdoc.bson():
+        stdout.write(ord(i))
+        stdout.write(" ")
+    echo ""
