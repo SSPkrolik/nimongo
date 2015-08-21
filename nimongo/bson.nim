@@ -61,7 +61,6 @@ converter toBson*(x: string): Bson =
 
 proc bson*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
-    echo bs
     case bs.kind
     of BsonKindDouble:
         let a = toSeq(cast[array[0..3, char]](bs.valueFloat64).items())
@@ -83,23 +82,27 @@ proc bson*(bs: Bson): string =
 proc `$`*(bs: Bson): string =
     ## Serialize Bson document into readable string
     var ident = ""
-    case bs.kind
-    of BsonKindDouble:
-        return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
-    of BsonKindStringUTF8:
-        return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
-    of BsonKindDocument:
-        var res: string = "{\n"
-        ident &= "  "
-        for i, item in bs.valueDocument:
-            if i == len(bs.valueDocument) - 1: res = res & ident & $item & "\n"
-            else: res = res & ident & $item & ",\n"
-        ident = ident[0..len(ident) - 2]
-        return res & "}"
-    else:
-        raise new(Exception)
-
-# ------------- type: BsonDocument ---------------#
+    proc stringify(bs: Bson): string =
+        case bs.kind
+        of BsonKindDouble:
+            return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
+        of BsonKindStringUTF8:
+            return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
+        of BsonKindDocument:
+            var res: string = ""
+            if bs.key != "":
+                res = res & ident[0..len(ident) - 3] & "\"" & bs.key & "\":\n"
+            res = res & ident & "{\n"
+            ident = ident & "  "
+            for i, item in bs.valueDocument:
+                if i == len(bs.valueDocument) - 1: res = res & ident & stringify(item) & "\n"
+                else: res = res & ident & stringify(item) & ",\n"
+            ident = ident[0..len(ident) - 3]
+            res = res & ident & "}"
+            return res
+        else:
+            raise new(Exception)
+    return stringify(bs)
 
 proc initBsonDocument*(): Bson =
     ## Create new top-level Bson document
