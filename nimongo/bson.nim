@@ -59,23 +59,28 @@ converter toBson*(x: string): Bson =
     ## Convert string to Bson object
     return Bson(key: "", kind: BsonKindStringUTF8, valueString: x)
 
-proc objToBytes*[T](x: T): string =
-    ## Convert arbitrary data piece into series of bytes
+proc int32ToBytes*(x: int32): string =
+    ## Convert int32 data piece into series of bytes
     let a = toSeq(cast[array[0..3, char]](x).items())
     return a.mapIt(string, $it).join()
+
+proc float64ToBytes*(x: float64): string =
+  ## Convert float64 data piece into series of bytes
+  let a = toSeq(cast[array[0..7, char]](x).items())
+  return a.mapIt(string, $it).join()
 
 proc bytes*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
     case bs.kind
     of BsonKindDouble:
-        return bs.kind & bs.key & char(0) & objToBytes(bs.valueFloat64) & char(0)
+        return bs.kind & bs.key & char(0) & float64ToBytes(bs.valueFloat64) & char(0)
     of BsonKindStringUTF8:
-        return bs.kind & bs.key & char(0) & bs.valueString & char(0)
+        return bs.kind & bs.key & char(0) & int32ToBytes(len(bs.valueString).int32 + 1) & bs.valueString & char(0)
     of BsonKindDocument:
         result = ""
         for val in bs.valueDocument: result = result & bytes(val)
         result = bs.kind & bs.key & char(0) & result
-        result = objToBytes(len(result) + 4) & result
+        result = int32ToBytes(int32(len(result) + 4)) & result
     else:
         raise new(Exception)
 
@@ -129,8 +134,9 @@ when isMainModule:
             "salary", 500.0
         )
     )
-    echo bdoc
-    for i in bdoc.bytes():
-        stdout.write(ord(i))
-        stdout.write(" ")
+    var bdoc2: Bson = initBsonDocument()
+    echo bdoc2
+    #for i in bdoc.bytes():
+    #    stdout.write(ord(i))
+    #    stdout.write(" ")
     echo ""

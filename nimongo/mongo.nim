@@ -1,6 +1,7 @@
 {.passL: "-pthread".}
 
 import locks
+import sequtils
 import sockets
 import strutils
 import tables
@@ -49,24 +50,37 @@ type
         db: Database
         client: Mongo
 
-    MongoMessageHeader = ref object  ## MongoDB Network protocol message header
+    MongoMessageHeader = object ## MongoDB network (wire)
+                                ## protocol message header
         messageLength: int32
         requestID: int32
         responseTo: int32
         opCode: int32
 
-proc newMongoMessageHeader(responseTo: int32, opCode: int32): MongoMessageHeader =
-    result.new
-    result.messageLength = 16
-    result.requestID = nextRequestId()
-    result.responseTo = responseTo
-    result.opCode = opCode
+    MongoMessageInsert = object ## Structure of insert
+                                ## operation
+        flags: int32
+        fullCollectionName: string
 
-proc `$`*(mmh: MongoMessageHeader): string =
-    let p = cast[array[0..15, char]](mmh)
-    result = ""
-    for c in p:
-        result = result & c
+proc initMongoMessageHeader(responseTo: int32, opCode: int32): MongoMessageHeader =
+    return MongoMessageHeader(
+        messageLength: 16,
+        requestID: nextRequestId(),
+        responseTo: responseTo,
+        opCode: opCode
+    )
+
+proc initMongoMessageInsert(coll: string): MongoMessageInsert =
+    return MongoMessageInsert(
+        flags: 0,
+        fullCollectionName: coll
+    )
+
+proc `$`(mmh: MongoMessageHeader): string =
+    return int32ToBytes(mmh.messageLength) & int32ToBytes(mmh.requestId) & int32ToBytes(mmh.responseTo) & int32ToBytes(mmh.opCode)
+
+proc `$`(mmi: MongoMessageInsert): string =
+    return int32ToBytes(mmi.flags) & mmi.fullCollectionName & char(0)
 
 proc `$`*(c: Collection): string =
     ## String representation of collection name
@@ -106,12 +120,16 @@ proc connect(m: Mongo): bool =
 proc insert*(c: Collection, document: Bson) =
     ## Insert new document into MongoDB
     var
-        msgHeader = newMongoMessageHeader(0, OP_INSERT)
+        msgHeader = initMongoMessageHeader(0, OP_INSERT)
+        msgInsert = initMongoMessageInsert($c)
         sdoc = document.bytes()
-    inc(msgHeader.messageLength, sdoc.len())
+    msgHeader.messageLength = int32(20 + len(msgInsert.fullCollectionName) + sdoc.len())
 
-    let data: string = `$`(msgHeader)  & sdoc
+    let data: string = $msgHeader & $msgInsert & sdoc
 
+    for c in data:
+        stdout.write(ord(c), " ")
+    echo ""
     if c.client.sock.trySend(data):
         echo "Successfully sent!"
 
@@ -139,7 +157,8 @@ when isMainModule:
     let c = m["falcon"]["profiles"]
     echo c
 
-    c.insert(initBsonDocument()("name", "John"))
+    #c.insert(initBsonDocument()("name", "John"))
+    c.insert(initBsonDocument())
 
     return true
 
