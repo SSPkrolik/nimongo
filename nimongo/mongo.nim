@@ -123,7 +123,7 @@ proc insert*(c: Collection, document: Bson) =
         msgHeader = initMongoMessageHeader(0, OP_INSERT)
         msgInsert = initMongoMessageInsert($c)
         sdoc = document.bytes()
-    msgHeader.messageLength = int32(20 + len(msgInsert.fullCollectionName) + sdoc.len())
+    msgHeader.messageLength = int32(21 + len(msgInsert.fullCollectionName) + sdoc.len())
 
     let data: string = $msgHeader & $msgInsert & sdoc
 
@@ -157,8 +157,8 @@ when isMainModule:
     let c = m["falcon"]["profiles"]
     echo c
 
-    #c.insert(initBsonDocument()("name", "John"))
-    c.insert(initBsonDocument())
+    let doc = initBsonDocument()("hello", "world")
+    c.insert(doc)
 
     return true
 

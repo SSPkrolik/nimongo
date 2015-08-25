@@ -79,7 +79,10 @@ proc bytes*(bs: Bson): string =
     of BsonKindDocument:
         result = ""
         for val in bs.valueDocument: result = result & bytes(val)
-        result = bs.kind & bs.key & char(0) & result
+        if bs.key != "":
+            result = bs.kind & bs.key & char(0) & result
+        else:
+            result = result & char(0)
         result = int32ToBytes(int32(len(result) + 4)) & result
     else:
         raise new(Exception)
@@ -134,9 +137,8 @@ when isMainModule:
             "salary", 500.0
         )
     )
-    var bdoc2: Bson = initBsonDocument()
-    echo bdoc2
-    #for i in bdoc.bytes():
-    #    stdout.write(ord(i))
-    #    stdout.write(" ")
+    var bdoc2: Bson = initBsonDocument()("hello", "world")
+    for i in bdoc2.bytes():
+        stdout.write(ord(i))
+        stdout.write(" ")
     echo ""
