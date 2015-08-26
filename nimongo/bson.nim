@@ -112,6 +112,15 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & float64ToBytes(bs.valueFloat64)
     of BsonKindStringUTF8:
         return bs.kind & bs.key & char(0) & int32ToBytes(len(bs.valueString).int32 + 1) & bs.valueString & char(0)
+    of BsonKindDocument:
+        result = ""
+        for val in bs.valueDocument: result = result & bytes(val)
+        if bs.key != "":
+            result = result & char(0)
+            result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
+        else:
+            result = result & char(0)
+            result = int32ToBytes(int32(len(result) + 4)) & result
     of BsonKindOid:
         return bs.kind & bs.key & char(0) & oidToBytes(bs.valueOid)
     of BsonKindBool:
@@ -122,15 +131,6 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
     of BsonKindInt64:
         return bs.kind & bs.key & char(0) & int64ToBytes(bs.valueInt64)
-    of BsonKindDocument:
-        result = ""
-        for val in bs.valueDocument: result = result & bytes(val)
-        if bs.key != "":
-            result = result & char(0)
-            result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
-        else:
-            result = result & char(0)
-            result = int32ToBytes(int32(len(result) + 4)) & result
     else:
         raise new(Exception)
 
@@ -165,6 +165,14 @@ proc initBsonDocument*(): Bson =
         key: "",
         kind: BsonKindDocument,
         valueDocument: newSeq[Bson]()
+    )
+
+proc initBsonArray*(): Bson =
+    ## Create new Bson array
+    result = Bson(
+        key: "",
+        kind: BsonKindArray,
+        valueArray: newSeq[Bson]()
     )
 
 proc null*(): Bson =
