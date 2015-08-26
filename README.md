@@ -6,7 +6,7 @@ with MongoDB using Nim programming language without any other dependencies.
 
 Usage:
 
-```
+```nim
 import oids
 import nimongo.mongo
 
