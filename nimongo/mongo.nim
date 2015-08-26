@@ -1,6 +1,7 @@
 {.passL: "-pthread".}
 
 import locks
+import oids
 import sequtils
 import sockets
 import strutils
@@ -157,7 +158,10 @@ when isMainModule:
     let c = m["falcon"]["profiles"]
     echo c
 
-    let doc = initBsonDocument()("manager", null())("balance", 500)("name", "John!")
+    let doc = initBsonDocument()(
+        "balance", 500)(
+        "manager", genOid()
+    )
     c.insert(doc)
 
     return true

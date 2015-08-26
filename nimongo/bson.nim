@@ -16,7 +16,7 @@ type BsonKind* = enum
     BsonKindBinary          = 0x05.char
     BsonKindUndefined       = 0x06.char
     BsonKindOid             = 0x07.char  ## Mongo Object ID
-    BsonKindBool            = 0x08.char
+    BsonKindBool            = 0x08.char  ## boolean value
     BsonKindTimeUTC         = 0x09.char
     BsonKindNull            = 0x0A.char  ## nil value stored in Mongo
     BsonKindRegexp          = 0x0B.char
@@ -72,6 +72,14 @@ converter toBson*(x: int): Bson =
     ## Convert int to Bson object
     return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
 
+converter toBson*(x: bool): Bson =
+    ## Convert bool to Bson object
+    return Bson(key: "", kind: BsonKindBool, valueBool: x)
+
+converter toBson*(x: Oid): Bson =
+    ## Convert Mongo Object Id to Bson object
+    return Bson(key: "", kind: BsonKindOid, valueOid: x)
+
 proc int32ToBytes*(x: int32): string =
     ## Convert int32 data piece into series of bytes
     let a = toSeq(cast[array[0..3, char]](x).items())
@@ -87,6 +95,16 @@ proc int64ToBytes*(x: int64): string =
   let a = toSeq(cast[array[0..7, char]](x).items())
   return a.mapIt(string, $it).join()
 
+proc boolToBytes*(x: bool): string =
+  ## Convert bool data piece into series of bytes
+  if x == true: return $char(1)
+  else: return $char(0)
+
+proc oidToBytes*(x: Oid): string =
+  ## Convert Mongo Object ID data piece into series to bytes
+  let a = toSeq(cast[array[0..11, char]](x).items())
+  return a.mapIt(string, $it).join()
+
 proc bytes*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
     case bs.kind
@@ -94,6 +112,10 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & float64ToBytes(bs.valueFloat64)
     of BsonKindStringUTF8:
         return bs.kind & bs.key & char(0) & int32ToBytes(len(bs.valueString).int32 + 1) & bs.valueString & char(0)
+    of BsonKindOid:
+        return bs.kind & bs.key & char(0) & oidToBytes(bs.valueOid)
+    of BsonKindBool:
+        return bs.kind & bs.key & char(0) & boolToBytes(bs.valueBool)
     of BsonKindNull:
         return bs.kind & bs.key & char(0)
     of BsonKindInt32:
