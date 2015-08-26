@@ -11,8 +11,8 @@ type BsonKind* = enum
     BsonKindGeneric         = 0x00.char
     BsonKindDouble          = 0x01.char  ## 64-bit floating-point
     BsonKindStringUTF8      = 0x02.char  ## UTF-8 encoded C string
-    BsonKindDocument        = 0x03.char
-    BsonKindArray           = 0x04.char  ## Like document with numbers as keys
+    BsonKindDocument        = 0x03.char  ## Embedded document
+    BsonKindArray           = 0x04.char
     BsonKindBinary          = 0x05.char
     BsonKindUndefined       = 0x06.char
     BsonKindOid             = 0x07.char  ## Mongo Object ID
@@ -126,10 +126,11 @@ proc bytes*(bs: Bson): string =
         result = ""
         for val in bs.valueDocument: result = result & bytes(val)
         if bs.key != "":
-            result = bs.kind & bs.key & char(0) & result
+            result = result & char(0)
+            result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
         else:
             result = result & char(0)
-        result = int32ToBytes(int32(len(result) + 4)) & result
+            result = int32ToBytes(int32(len(result) + 4)) & result
     else:
         raise new(Exception)
 

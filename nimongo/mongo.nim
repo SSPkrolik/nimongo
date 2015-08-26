@@ -160,8 +160,11 @@ when isMainModule:
 
     let doc = initBsonDocument()(
         "balance", 500)(
-        "manager", genOid()
-    )
+        "_id", genOid())(
+        "skills", initBsonDocument()(
+            "C++", 10)(
+            "Python", 20'i32)
+        )
     c.insert(doc)
 
     return true
