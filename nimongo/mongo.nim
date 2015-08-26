@@ -157,7 +157,7 @@ when isMainModule:
     let c = m["falcon"]["profiles"]
     echo c
 
-    let doc = initBsonDocument()("hello", "world")
+    let doc = initBsonDocument()("manager", null())("balance", 500)("name", "John!")
     c.insert(doc)
 
     return true
