@@ -18,7 +18,7 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
     OP_MSG          = 1000'i32 ##
     OP_UPDATE       = 2001'i32 ##
     OP_INSERT       = 2002'i32 ## Insert new document into MongoDB
-    #RESERVED       = 2003'i32 ##
+    #RESERVED       = 2003'i32 ## Reserved by MongoDB developers
     OP_QUERY        = 2004'i32 ##
     OP_GET_MORE     = 2005'i32 ##
     OP_DELETE       = 2006'i32 ##
@@ -93,6 +93,10 @@ proc initMongoMessageDelete(coll: string): MongoMessageDelete =
         fullCollectionName: coll,
         flags: 0
     )
+
+proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
+    ## Builds Mongo message header as a series of bytes
+    return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
 
 proc initMongoMessageUpdate(coll: string): MongoMessageUpdate =
     return MongoMessageUpdate(
