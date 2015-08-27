@@ -51,17 +51,20 @@ type
         db: Database
         client: Mongo
 
-    MongoMessageHeader = object ## MongoDB network (wire)
-                                ## protocol message header
+    MongoMessageHeader = object ## MongoDB network (wire) protocol message header
         messageLength: int32
         requestID: int32
         responseTo: int32
         opCode: int32
 
-    MongoMessageInsert = object ## Structure of insert
-                                ## operation
+    MongoMessageInsert = object ## Structure of OP_INSERT operation
         flags: int32
         fullCollectionName: string
+
+    MongoMessageDelete = object ## Structure of OP_DELETE operation
+        ZERO: int32
+        fullCollectionName: string
+        flags: int32
 
 proc initMongoMessageHeader(responseTo: int32, opCode: int32): MongoMessageHeader =
     return MongoMessageHeader(
@@ -77,11 +80,21 @@ proc initMongoMessageInsert(coll: string): MongoMessageInsert =
         fullCollectionName: coll
     )
 
+proc initMongoMessageDelete(coll: string): MongoMessageDelete =
+    return MongoMessageDelete(
+        ZERO: 0,
+        fullCollectionName: coll,
+        flags: 0
+    )
+
 proc `$`(mmh: MongoMessageHeader): string =
     return int32ToBytes(mmh.messageLength) & int32ToBytes(mmh.requestId) & int32ToBytes(mmh.responseTo) & int32ToBytes(mmh.opCode)
 
 proc `$`(mmi: MongoMessageInsert): string =
     return int32ToBytes(mmi.flags) & mmi.fullCollectionName & char(0)
+
+proc `$`(mmd: MongoMessageDelete): string =
+    return int32ToBytes(mmd.ZERO) & mmd.fullCollectionName & char(0) & int32ToBytes(mmd.flags)
 
 proc `$`*(c: Collection): string =
     ## String representation of collection name
@@ -109,6 +122,10 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.port = port
     result.requestID = nextRequestID()
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
+
+proc `$`*(m: Mongo): string =
+    ## Return full DSN for the Mongo connection
+    return "mongodb://$#:$#" % [m.host, $m.port]
 
 proc connect(m: Mongo): bool =
     ## Connect socket to mongo server
@@ -154,9 +171,17 @@ proc insert*(c: Collection, documents: seq[Bson]) =
     if c.client.sock.trySend(data & foldl(sdocs, a & b)):
         echo "Successfully sent!"
 
-proc `$`*(m: Mongo): string =
-    ## Return full DSN for the Mongo connection
-    return "mongodb://$#:$#" % [m.host, $m.port]
+proc remove*(c: Collection, selector: Bson) =
+    ## Delete documents from MongoDB
+    var
+        msgHeader = initMongoMessageHeader(0, OP_DELETE)
+        msgDelete = initMongoMessageDelete($c)
+    let
+        sdoc = selector.bytes()
+    msgHeader.messageLength = int32(25 + len(msgDelete.fullCollectionName) + sdoc.len())
+
+    if c.client.sock.trySend($msgHeader & $msgDelete & sdoc):
+        echo "OP_DELETE successfully sent!"
 
 when isMainModule:
   let unittest = proc(): bool =
@@ -189,10 +214,14 @@ when isMainModule:
     #    )
     #let doc = initBsonDocument()("languages", @["Python", "Ruby", "C"].mapIt(Bson, toBson(it)))
 
-    let docs = @[initBsonDocument()("balance", "100.23"), initBsonDocument()("balance", 15'i32)]
-
+    let docs = @[initBsonDocument()("balance", 100.23), initBsonDocument()("balance", 15'i32)]
     echo docs
+
+    let sel = initBsonDocument()("balance", initBsonDocument()("$lt", 20))
+    echo sel
+
     c.insert(docs)
+    c.remove(sel)
 
     return true
 
