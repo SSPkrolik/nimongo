@@ -143,7 +143,7 @@ proc insert*(c: Collection, documents: seq[Bson]) =
         msgInsert = initMongoMessageInsert($c)
         total = 0
     let
-        sdocs: seq[string] = mapIt(documents, string, $it)
+        sdocs: seq[string] = mapIt(documents, string, bytes(it))
 
     for sdoc in sdocs: inc(total, sdoc.len())
 
@@ -151,11 +151,8 @@ proc insert*(c: Collection, documents: seq[Bson]) =
 
     let data: string = $msgHeader & $msgInsert
 
-    if c.client.sock.trySend(data):
-        for sdoc in sdocs:
-            if not c.client.sock.trySend(sdoc):
-                echo "Network fail!"
-                return
+    if c.client.sock.trySend(data & foldl(sdocs, a & b)):
+        echo "Successfully sent!"
 
 proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
@@ -182,18 +179,20 @@ when isMainModule:
     echo c
 
     #let langs: seq[Bson] = mapIt(@["Python", "Ruby", "C"], toBson(it))
-    let doc = initBsonDocument()(
-        "balance", 500)(
-        "_id", genOid())(
-        "languages", @["Python", "Ruby", "C", "CPP"])(
-        "skills", initBsonDocument()(
-            "C++", 10)(
-            "Python", 20'i32)
-        )
+    #let doc = initBsonDocument()(
+    #    "balance", 500)(
+    #    "_id", genOid())(
+    #    "languages", @["Python", "Ruby", "C", "CPP"])(
+    #    "skills", initBsonDocument()(
+    #        "C++", 10)(
+    #        "Python", 20'i32)
+    #    )
     #let doc = initBsonDocument()("languages", @["Python", "Ruby", "C"].mapIt(Bson, toBson(it)))
 
-    echo doc
-    c.insert(doc)
+    let docs = @[initBsonDocument()("balance", "100.23"), initBsonDocument()("balance", 15'i32)]
+
+    echo docs
+    c.insert(docs)
 
     return true
 
