@@ -134,6 +134,29 @@ proc insert*(c: Collection, document: Bson) =
     if c.client.sock.trySend(data):
         echo "Successfully sent!"
 
+proc insert*(c: Collection, documents: seq[Bson]) =
+    ## Insert several new documents into MongoDB using one request
+    assert len(documents) > 0
+
+    var
+        msgHeader = initMongoMessageHeader(0, OP_INSERT)
+        msgInsert = initMongoMessageInsert($c)
+        total = 0
+    let
+        sdocs: seq[string] = mapIt(documents, string, $it)
+
+    for sdoc in sdocs: inc(total, sdoc.len())
+
+    msgHeader.messageLength = int32(21 + len(msgInsert.fullCollectionName) + total)
+
+    let data: string = $msgHeader & $msgInsert
+
+    if c.client.sock.trySend(data):
+        for sdoc in sdocs:
+            if not c.client.sock.trySend(sdoc):
+                echo "Network fail!"
+                return
+
 proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
