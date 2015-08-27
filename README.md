@@ -20,10 +20,10 @@ let connectResult = m.connect()
 let collection = m["db"]["collectionName"]
 
 ## Create new bson document
-let doc = initBsonDocument()(
+let doc = B(
     "_id": genOid())(
     "name", "John")(
-    "skills", initBsonDocument()(
+    "skills", B(
         "Nim", "good")(
         "JavaScript", "so-so"
         )
