@@ -26,7 +26,7 @@ let collection = m["db"]["collectionName"]
 
 ## Create new bson document
 let doc = B(
-    "_id": genOid())(
+    "_id", genOid())(
     "name", "John")(
     "skills", B(
         "Nim", "good")(

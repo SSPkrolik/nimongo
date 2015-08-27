@@ -1,4 +1,4 @@
-# Required for using __Lock on linux
+# Required for using _Lock on linux
 when hostOs == "linux":
     {.passL: "-pthread".}
 
