@@ -1,4 +1,6 @@
-{.passL: "-pthread".}
+# Required for using __Lock on linux
+when hostOs == "linux":
+    {.passL: "-pthread".}
 
 import locks
 import oids
