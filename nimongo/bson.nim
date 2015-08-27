@@ -121,6 +121,11 @@ proc bytes*(bs: Bson): string =
         else:
             result = result & char(0)
             result = int32ToBytes(int32(len(result) + 4)) & result
+    of BsonKindArray:
+        result = ""
+        for val in bs.valueArray: result = result & bytes(val)
+        result = result & char(0)
+        result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
     of BsonKindOid:
         return bs.kind & bs.key & char(0) & oidToBytes(bs.valueOid)
     of BsonKindBool:
@@ -143,6 +148,22 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
         of BsonKindStringUTF8:
             return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
+        of BsonKindOid:
+            return "\"$#\": ObjectId(\"$#\")" % [bs.key, $bs.valueOid]
+        of BsonKindInt32:
+            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
+        of BSonKindInt64:
+            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
+        of BsonKindArray:
+            var res: string = ""
+            res = res & ident[0..len(ident) - 3] & bs.key & ": ["
+            ident = ident & "  "
+            for i, item in bs.valueArray:
+                if i == len(bs.valueArray) - 1: res = res & stringify(item)
+                else: res = res & stringify(item) & ", "
+            ident = ident[0..len(ident) - 3]
+            res = res & "]"
+            return res
         of BsonKindDocument:
             var res: string = ""
             if bs.key != "":
@@ -185,6 +206,25 @@ proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
     var value: Bson = val
     value.key = key
     result.valueDocument.add(value)
+
+proc `()`*(bs: Bson, key: string, values: seq[Bson]): Bson {.discardable.} =
+    ## Add array field to bson object
+    result = bs
+
+    var arr: Bson = initBsonArray()
+
+    arr.kind = BsonKindArray
+    arr.valueArray = @[]
+    arr.key = key
+
+    var counter = 0
+    for val in values.items():
+        var tmpVal = val
+        tmpVal.key = $counter
+        arr.valueArray.add(tmpVal)
+        inc(counter)
+
+    result.valueDocument.add(arr)
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."

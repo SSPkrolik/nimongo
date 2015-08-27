@@ -158,13 +158,18 @@ when isMainModule:
     let c = m["falcon"]["profiles"]
     echo c
 
+    #let langs: seq[Bson] = mapIt(@["Python", "Ruby", "C"], toBson(it))
     let doc = initBsonDocument()(
         "balance", 500)(
         "_id", genOid())(
+        "languages", (@["Python", "Ruby", "C"]).mapIt(Bson, toBson(it)) )(
         "skills", initBsonDocument()(
             "C++", 10)(
             "Python", 20'i32)
         )
+    #let doc = initBsonDocument()("languages", @["Python", "Ruby", "C"].mapIt(Bson, toBson(it)))
+
+    echo doc
     c.insert(doc)
 
     return true
