@@ -162,7 +162,7 @@ when isMainModule:
     let doc = initBsonDocument()(
         "balance", 500)(
         "_id", genOid())(
-        "languages", (@["Python", "Ruby", "C"]).mapIt(Bson, toBson(it)) )(
+        "languages", @["Python", "Ruby", "C", "CPP"])(
         "skills", initBsonDocument()(
             "C++", 10)(
             "Python", 20'i32)

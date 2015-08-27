@@ -207,7 +207,7 @@ proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
     value.key = key
     result.valueDocument.add(value)
 
-proc `()`*(bs: Bson, key: string, values: seq[Bson]): Bson {.discardable.} =
+proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     ## Add array field to bson object
     result = bs
 
@@ -219,7 +219,7 @@ proc `()`*(bs: Bson, key: string, values: seq[Bson]): Bson {.discardable.} =
 
     var counter = 0
     for val in values.items():
-        var tmpVal = val
+        var tmpVal: Bson = val
         tmpVal.key = $counter
         arr.valueArray.add(tmpVal)
         inc(counter)
