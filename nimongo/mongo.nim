@@ -66,6 +66,11 @@ type
         fullCollectionName: string
         flags: int32
 
+    MongoMessageUpdate = object ## Structure of OP_UPDATE operation
+        ZERO: int32
+        fullCollectionName: string
+        flags: int32
+
 proc initMongoMessageHeader(responseTo: int32, opCode: int32): MongoMessageHeader =
     return MongoMessageHeader(
         messageLength: 16,
@@ -87,6 +92,13 @@ proc initMongoMessageDelete(coll: string): MongoMessageDelete =
         flags: 0
     )
 
+proc initMongoMessageUpdate(coll: string): MongoMessageUpdate =
+    return MongoMessageUpdate(
+        ZERO: 0,
+        fullCollectionName: coll,
+        flags: 0
+    )
+
 proc `$`(mmh: MongoMessageHeader): string =
     return int32ToBytes(mmh.messageLength) & int32ToBytes(mmh.requestId) & int32ToBytes(mmh.responseTo) & int32ToBytes(mmh.opCode)
 
@@ -95,6 +107,9 @@ proc `$`(mmi: MongoMessageInsert): string =
 
 proc `$`(mmd: MongoMessageDelete): string =
     return int32ToBytes(mmd.ZERO) & mmd.fullCollectionName & char(0) & int32ToBytes(mmd.flags)
+
+proc `$`(mmu: MongoMessageUpdate): string =
+    return int32ToBytes(mmu.ZERO) & mmu.fullCollectionName & char(0) & int32ToBytes(mmu.flags)
 
 proc `$`*(c: Collection): string =
     ## String representation of collection name
@@ -183,6 +198,21 @@ proc remove*(c: Collection, selector: Bson) =
     if c.client.sock.trySend($msgHeader & $msgDelete & sdoc):
         echo "OP_DELETE successfully sent!"
 
+proc update*(c: Collection, selector: Bson, update: Bson) =
+    ## Update MongoDB documents
+    var
+        msgHeader = initMongoMessageHeader(0, OP_UPDATE)
+        msgUpdate = initMongoMessageUpdate($c)
+
+    let
+        ssel = selector.bytes()
+        supd = update.bytes()
+
+    msgHeader.messageLength = int32(25 + len(msgUpdate.fullCollectionName) + ssel.len() + supd.len())
+
+    if c.client.sock.trySend($msgHeader & $msgUpdate & ssel & supd):
+        echo "OP_UPDATE successfully sent!"
+
 when isMainModule:
   let unittest = proc(): bool =
     ## Test object
@@ -220,8 +250,13 @@ when isMainModule:
     let sel = initBsonDocument()("balance", initBsonDocument()("$lt", 20))
     echo sel
 
+    c.update(
+        initBsonDocument()("balance", 15),
+        initBsonDocument()("$set", initBsonDocument()("balance", "UPDATED"))
+    )
+
     c.insert(docs)
-    c.remove(sel)
+    #c.remove(sel)
 
     return true
 
