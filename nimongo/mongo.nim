@@ -160,9 +160,6 @@ proc insert*(c: Collection, document: Bson) =
 
     let data: string = $msgHeader & $msgInsert & sdoc
 
-    for c in data:
-        stdout.write(ord(c), " ")
-    echo ""
     if c.client.sock.trySend(data):
         echo "Successfully sent!"
 
@@ -231,32 +228,31 @@ when isMainModule:
         return false
 
     let c = m["falcon"]["profiles"]
-    echo c
+    echo "Working with collection: ", c
 
-    #let langs: seq[Bson] = mapIt(@["Python", "Ruby", "C"], toBson(it))
-    #let doc = initBsonDocument()(
-    #    "balance", 500)(
-    #    "_id", genOid())(
-    #    "languages", @["Python", "Ruby", "C", "CPP"])(
-    #    "skills", initBsonDocument()(
-    #        "C++", 10)(
-    #        "Python", 20'i32)
-    #    )
-    #let doc = initBsonDocument()("languages", @["Python", "Ruby", "C"].mapIt(Bson, toBson(it)))
+    ## Test single document insertion
+    let doc = B(
+        "balance", 500)(
+        "_id", genOid())(
+        "languages", @["Python", "Ruby", "C", "CPP"])(
+        "skills", B(
+            "C++", 10)(
+            "Python", 20'i32)
+        )
+    c.insert(doc)
 
+    ## Test multiple document insertion
     let docs = @[initBsonDocument()("balance", 100.23), initBsonDocument()("balance", 15'i32)]
-    echo docs
+    c.insert(docs)
 
-    let sel = initBsonDocument()("balance", initBsonDocument()("$lt", 20))
-    echo sel
-
+    ## Test update
     c.update(
         B("balance", 15),
         B("$set", B("balance", "UPDATED"))
     )
 
-    c.insert(docs)
-    #c.remove(sel)
+    ## Test document removal
+    c.remove(B("balance", 100.23))
 
     return true
 
