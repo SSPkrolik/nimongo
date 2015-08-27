@@ -4,7 +4,12 @@ nimongo - Pure Nim MongoDB Driver
 `nimongo` has a main intention to provide developer-friendly way to interact
 with MongoDB using Nim programming language without any other dependencies.
 
-Usage:
+Installation
+------------
+You can use `nimble` package manager to install `nimongo`.
+
+Usage
+-----
 
 ```nim
 import oids
