@@ -196,6 +196,12 @@ proc initBsonArray*(): Bson =
         valueArray: newSeq[Bson]()
     )
 
+template B*: expr =
+    initBsonDocument()
+
+template B*(key: string, val: Bson): expr =  ## Shortcut for __initBsonDocument
+    initBsonDocument()(key, val)
+
 proc null*(): Bson =
     ## Create new Bson 'null' value
     return Bson(key: "", kind: BsonKindNull)

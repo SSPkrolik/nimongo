@@ -251,8 +251,8 @@ when isMainModule:
     echo sel
 
     c.update(
-        initBsonDocument()("balance", 15),
-        initBsonDocument()("$set", initBsonDocument()("balance", "UPDATED"))
+        B("balance", 15),
+        B("$set", B("balance", "UPDATED"))
     )
 
     c.insert(docs)
