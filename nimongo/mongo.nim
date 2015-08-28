@@ -24,9 +24,6 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
     OP_DELETE       = 2006'i32 ##
     OP_KILL_CURSORS = 2007'i32 ##
 
-const
-    ContinueOnError: int32 = 1
-
 converter toInt32(ok: OperationKind): int32 =
     return ok.int32
 
@@ -162,21 +159,14 @@ proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false)
     ## Insert several new documents into MongoDB using one request
     assert len(documents) > 0
 
-    var
-        msgHeader = initMongoMessageHeader(0, OP_INSERT)
-        msgInsert = buildMessageInsert(0, $c)
-        total = 0
-    let
-        sdocs: seq[string] = mapIt(documents, string, bytes(it))
-
+    var total = 0
+    let sdocs: seq[string] = mapIt(documents, string, bytes(it))
     for sdoc in sdocs: inc(total, sdoc.len())
 
-    msgHeader.messageLength = int32(21 + len($c) + total)
+    let msgHeader = buildMessageHeader(int32(21 + len($c) + total), nextRequestId(), 0, OP_INSERT)
 
-    let data: string = $msgHeader & $msgInsert
-
-    if c.client.sock.trySend(data & foldl(sdocs, a & b)):
-        echo "Successfully sent!"
+    if c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b)):
+        echo "OP_INSERT multiple successfully sent!"
 
 proc remove*(c: Collection, selector: Bson) =
     ## Delete documents from MongoDB
@@ -238,7 +228,7 @@ when isMainModule:
 
     ## Test multiple document insertion
     let docs = @[initBsonDocument()("balance", 100.23), initBsonDocument()("balance", 15'i32)]
-    c.insert(docs)
+    c.insert(docs, continueOnError=true)
 
     ## Test update
     c.update(
