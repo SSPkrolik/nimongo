@@ -15,31 +15,22 @@ import bson
 
 type OperationKind = enum      ## Type of operation performed by MongoDB
     OP_REPLY        =    1'i32 ##
-    OP_MSG          = 1000'i32 ##
+    # OP_MSG        = 1000'i32 ## Deprecated.
     OP_UPDATE       = 2001'i32 ##
     OP_INSERT       = 2002'i32 ## Insert new document into MongoDB
-    #RESERVED       = 2003'i32 ## Reserved by MongoDB developers
+    # RESERVED      = 2003'i32 ## Reserved by MongoDB developers
     OP_QUERY        = 2004'i32 ##
     OP_GET_MORE     = 2005'i32 ##
-    OP_DELETE       = 2006'i32 ##
+    OP_DELETE       = 2006'i32 ## Remove documents from MongoDB
     OP_KILL_CURSORS = 2007'i32 ##
 
-converter toInt32(ok: OperationKind): int32 =
+converter toInt32(ok: OperationKind): int32 =  ## Convert OperationKind ot int32
     return ok.int32
-
-var
-    MongoRequestIDLock: Lock
-    MongoRequestID {.guard: MongoRequestIDLock.}: int32 = 0
-
-proc nextRequestId(): int32 =
-    ## Return next request id
-    {.locks: [MongoRequestIDLock].}:
-        MongoRequestID = (MongoRequestID + 1) mod (int32.high - 1'i32)
-        return MongoRequestID
 
 type
     Mongo* = ref object ## Mongo represents connection to MongoDB server
-        requestID: int32
+        requestLock: Lock
+        requestId: int32
         host: string
         port: uint16
         sock: Socket
@@ -52,6 +43,20 @@ type
         name: string
         db: Database
         client: Mongo
+
+proc nextRequestId(m: Mongo): int32 =
+    ## Return next request id for current MongoDB client
+    {.locks: [m.requestLock].}:
+        m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
+        return m.requestId
+
+proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
+    ## Mongo constructor
+    result.new
+    result.host = host
+    result.port = port
+    result.requestID = 0
+    result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
     ## Build Mongo message header as a series of bytes
@@ -68,6 +73,10 @@ proc buildMessageDelete(flags: int32, fullCollectionName: string): string =
 proc buildMessageUpdate(flags: int32, fullCollectionName: string): string =
     ## Build Mongo update message
     return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
+
+proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: int32, numberToReturn: int32): string =
+    ## Build Mongo query message
+    return int32ToBytes(flags) & fullCollectionName & char(0) & int32ToBytes(numberToSkip) & int32ToBytes(numberToReturn)
 
 proc `$`*(c: Collection): string =
     ## String representation of collection name
@@ -88,14 +97,6 @@ proc `[]`*(db: Database, collectionName: string): Collection =
     result.client = db.client
     result.db = db
 
-proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
-    ## Mongo constructor
-    result.new
-    result.host = host
-    result.port = port
-    result.requestID = nextRequestID()
-    result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
-
 proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
@@ -112,7 +113,7 @@ proc insert*(c: Collection, document: Bson): bool {.discardable.} =
     ## Insert new document into MongoDB
     let
         sdoc = document.bytes()
-        msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), nextRequestId(), 0, OP_INSERT)
+        msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
 
     return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
@@ -124,7 +125,7 @@ proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false)
     let sdocs: seq[string] = mapIt(documents, string, bytes(it))
     for sdoc in sdocs: inc(total, sdoc.len())
 
-    let msgHeader = buildMessageHeader(int32(21 + len($c) + total), nextRequestId(), 0, OP_INSERT)
+    let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
 
     return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
 
@@ -132,7 +133,7 @@ proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
     ## Delete documents from MongoDB
     let
         sdoc = selector.bytes()
-        msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), nextRequestId(), 0, OP_DELETE)
+        msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
 
     return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
 
@@ -141,6 +142,9 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
     let
         ssel = selector.bytes()
         supd = update.bytes()
-        msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), nextRequestId(), 0, OP_UPDATE)
+        msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
 
     return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
+
+proc find*(c: Collection, selector: Bson): seq[Bson] =
+    ## Query documents from MongoDB
