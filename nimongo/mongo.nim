@@ -38,19 +38,19 @@ converter toInt32(ok: OperationKind): int32 =  ## Convert OperationKind ot int32
 type
     Mongo* = ref object ## Mongo represents connection to MongoDB server
         requestLock: Lock
-        requestId: int32
-        host: string
-        port: uint16
-        sock: Socket
-        queryFlags: int32
+        requestId:   int32
+        host:        string
+        port:        uint16
+        sock:        Socket
+        queryFlags:  int32
 
     Database* = ref object ## MongoDB database object
-        name: string
+        name:   string
         client: Mongo
 
     Collection* = ref object ## MongoDB collection object
-        name: string
-        db: Database
+        name:   string
+        db:     Database
         client: Mongo
 
 proc nextRequestId(m: Mongo): int32 =
