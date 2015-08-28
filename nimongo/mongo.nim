@@ -59,10 +59,6 @@ type
         responseTo: int32
         opCode: int32
 
-    MongoMessageInsert = object ## Structure of OP_INSERT operation
-        flags: int32
-        fullCollectionName: string
-
     MongoMessageDelete = object ## Structure of OP_DELETE operation
         ZERO: int32
         fullCollectionName: string
@@ -81,12 +77,6 @@ proc initMongoMessageHeader(responseTo: int32, opCode: int32): MongoMessageHeade
         opCode: opCode
     )
 
-proc initMongoMessageInsert(coll: string): MongoMessageInsert =
-    return MongoMessageInsert(
-        flags: 0,
-        fullCollectionName: coll
-    )
-
 proc initMongoMessageDelete(coll: string): MongoMessageDelete =
     return MongoMessageDelete(
         ZERO: 0,
@@ -98,6 +88,10 @@ proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int3
     ## Builds Mongo message header as a series of bytes
     return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
 
+proc buildMessageInsert(flags: int32, fullCollectionName: string): string =
+    ## builds Mongo insert messsage
+    return int32ToBytes(flags) & fullCollectionName & char(0)
+
 proc initMongoMessageUpdate(coll: string): MongoMessageUpdate =
     return MongoMessageUpdate(
         ZERO: 0,
@@ -107,9 +101,6 @@ proc initMongoMessageUpdate(coll: string): MongoMessageUpdate =
 
 proc `$`(mmh: MongoMessageHeader): string =
     return int32ToBytes(mmh.messageLength) & int32ToBytes(mmh.requestId) & int32ToBytes(mmh.responseTo) & int32ToBytes(mmh.opCode)
-
-proc `$`(mmi: MongoMessageInsert): string =
-    return int32ToBytes(mmi.flags) & mmi.fullCollectionName & char(0)
 
 proc `$`(mmd: MongoMessageDelete): string =
     return int32ToBytes(mmd.ZERO) & mmd.fullCollectionName & char(0) & int32ToBytes(mmd.flags)
@@ -156,18 +147,13 @@ proc connect(m: Mongo): bool =
         return false
     return true
 
-proc insert*(c: Collection, document: Bson) =
+proc insert*(c: Collection, document: Bson): bool {.discardable.} =
     ## Insert new document into MongoDB
-    var
-        msgHeader = initMongoMessageHeader(0, OP_INSERT)
-        msgInsert = initMongoMessageInsert($c)
+    let
         sdoc = document.bytes()
-    msgHeader.messageLength = int32(21 + len(msgInsert.fullCollectionName) + sdoc.len())
+        msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), nextRequestId(), 0, OP_INSERT)
 
-    let data: string = $msgHeader & $msgInsert & sdoc
-
-    if c.client.sock.trySend(data):
-        echo "Successfully sent!"
+    return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
 proc insert*(c: Collection, documents: seq[Bson]) =
     ## Insert several new documents into MongoDB using one request
@@ -175,14 +161,14 @@ proc insert*(c: Collection, documents: seq[Bson]) =
 
     var
         msgHeader = initMongoMessageHeader(0, OP_INSERT)
-        msgInsert = initMongoMessageInsert($c)
+        msgInsert = buildMessageInsert(0, $c)
         total = 0
     let
         sdocs: seq[string] = mapIt(documents, string, bytes(it))
 
     for sdoc in sdocs: inc(total, sdoc.len())
 
-    msgHeader.messageLength = int32(21 + len(msgInsert.fullCollectionName) + total)
+    msgHeader.messageLength = int32(21 + len($c) + total)
 
     let data: string = $msgHeader & $msgInsert
 
