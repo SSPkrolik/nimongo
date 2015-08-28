@@ -25,7 +25,7 @@ import nimongo.bson  ## MongoDB BSON serialization/deserialization
 import nimongo.mongo ## MongoDB clinet
 
 ## Create new Mongo client
-var m = new Mongo()
+var m = newMongo().slaveOk(true).allowPartial(false)
 
 ## Connect to Mongo server
 let connectResult = m.connect()

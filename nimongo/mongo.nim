@@ -24,6 +24,14 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
     OP_DELETE       = 2006'i32 ## Remove documents from MongoDB
     OP_KILL_CURSORS = 2007'i32 ##
 
+const
+    TailableCursor   = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
+    SlaveOk          = 1'i32 shl 2 ## Allow to query replica set slaves
+    NoCursorTimeout  = 1'i32 shl 4 ##
+    AwaitData        = 1'i32 shl 5 ##
+    Exhaust          = 1'i32 shl 6 ##
+    Partial          = 1'i32 shl 7 ## Get info only from running shards
+
 converter toInt32(ok: OperationKind): int32 =  ## Convert OperationKind ot int32
     return ok.int32
 
@@ -34,6 +42,7 @@ type
         host: string
         port: uint16
         sock: Socket
+        queryFlags: int32
 
     Database* = ref object ## MongoDB database object
         name: string
@@ -57,6 +66,16 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.port = port
     result.requestID = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
+
+proc slaveOk*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disable querying from slaves in replica sets
+    m.queryFlags = if enable: m.queryFlags or SlaveOk else: m.queryFlags and (not SlaveOk)
+    return m
+
+proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
+    ## Enable/disable allowance for partial data retrieval from mongos when
+    ## one or more shards are down.
+    m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
 
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
     ## Build Mongo message header as a series of bytes
@@ -146,5 +165,5 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
 
     return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
-proc find*(c: Collection, selector: Bson): seq[Bson] =
+proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): seq[Bson] =
     ## Query documents from MongoDB
