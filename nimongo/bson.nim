@@ -199,8 +199,11 @@ proc initBsonArray*(): Bson =
 template B*: expr =
     initBsonDocument()
 
-template B*(key: string, val: Bson): expr =  ## Shortcut for __initBsonDocument
+template B*(key: string, val: Bson): expr =  ## Shortcut for _initBsonDocument
     initBsonDocument()(key, val)
+
+template B*[T](key: string, values: seq[T]): expr =
+    initBsonDocument()(key, values)
 
 proc null*(): Bson =
     ## Create new Bson 'null' value

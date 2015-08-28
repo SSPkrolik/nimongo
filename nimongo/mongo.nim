@@ -53,37 +53,6 @@ type
         db: Database
         client: Mongo
 
-    MongoMessageHeader = object ## MongoDB network (wire) protocol message header
-        messageLength: int32
-        requestID: int32
-        responseTo: int32
-        opCode: int32
-
-    MongoMessageDelete = object ## Structure of OP_DELETE operation
-        ZERO: int32
-        fullCollectionName: string
-        flags: int32
-
-    MongoMessageUpdate = object ## Structure of OP_UPDATE operation
-        ZERO: int32
-        fullCollectionName: string
-        flags: int32
-
-proc initMongoMessageHeader(responseTo: int32, opCode: int32): MongoMessageHeader =
-    return MongoMessageHeader(
-        messageLength: 16,
-        requestID: nextRequestId(),
-        responseTo: responseTo,
-        opCode: opCode
-    )
-
-proc initMongoMessageDelete(coll: string): MongoMessageDelete =
-    return MongoMessageDelete(
-        ZERO: 0,
-        fullCollectionName: coll,
-        flags: 0
-    )
-
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
     ## Build Mongo message header as a series of bytes
     return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
@@ -96,21 +65,9 @@ proc buildMessageDelete(flags: int32, fullCollectionName: string): string =
     ## Build Mongo delete message
     return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
 
-proc initMongoMessageUpdate(coll: string): MongoMessageUpdate =
-    return MongoMessageUpdate(
-        ZERO: 0,
-        fullCollectionName: coll,
-        flags: 0
-    )
-
-proc `$`(mmh: MongoMessageHeader): string =
-    return int32ToBytes(mmh.messageLength) & int32ToBytes(mmh.requestId) & int32ToBytes(mmh.responseTo) & int32ToBytes(mmh.opCode)
-
-proc `$`(mmd: MongoMessageDelete): string =
-    return int32ToBytes(mmd.ZERO) & mmd.fullCollectionName & char(0) & int32ToBytes(mmd.flags)
-
-proc `$`(mmu: MongoMessageUpdate): string =
-    return int32ToBytes(mmu.ZERO) & mmu.fullCollectionName & char(0) & int32ToBytes(mmu.flags)
+proc buildMessageUpdate(flags: int32, fullCollectionName: string): string =
+    ## Build Mongo update message
+    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
 
 proc `$`*(c: Collection): string =
     ## String representation of collection name
@@ -159,7 +116,7 @@ proc insert*(c: Collection, document: Bson): bool {.discardable.} =
 
     return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
-proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false) =
+proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
     ## Insert several new documents into MongoDB using one request
     assert len(documents) > 0
 
@@ -169,8 +126,7 @@ proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false)
 
     let msgHeader = buildMessageHeader(int32(21 + len($c) + total), nextRequestId(), 0, OP_INSERT)
 
-    if c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b)):
-        echo "OP_INSERT multiple successfully sent!"
+    return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
 
 proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
     ## Delete documents from MongoDB
@@ -180,66 +136,11 @@ proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
 
     return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
 
-proc update*(c: Collection, selector: Bson, update: Bson) =
-    ## Update MongoDB documents
-    var
-        msgHeader = initMongoMessageHeader(0, OP_UPDATE)
-        msgUpdate = initMongoMessageUpdate($c)
-
+proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} =
+    ## Update MongoDB document[s]
     let
         ssel = selector.bytes()
         supd = update.bytes()
+        msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), nextRequestId(), 0, OP_UPDATE)
 
-    msgHeader.messageLength = int32(25 + len(msgUpdate.fullCollectionName) + ssel.len() + supd.len())
-
-    if c.client.sock.trySend($msgHeader & $msgUpdate & ssel & supd):
-        echo "OP_UPDATE successfully sent!"
-
-when isMainModule:
-  let unittest = proc(): bool =
-    ## Test object
-    var m: Mongo = newMongo()
-
-    ## Test () constructor
-    m = newMongo()
-    assert(m.host == "127.0.0.1")
-    assert(m.port == uint16(27017))
-
-    ## Test `$` operator
-    assert($m == "mongodb://127.0.0.1:27017")
-
-    let connectResult: bool = m.connect()
-    if not connectResult:
-        return false
-
-    let c = m["falcon"]["profiles"]
-    echo "Working with collection: ", c
-
-    ## Test single document insertion
-    let doc = B(
-        "balance", 500)(
-        "_id", genOid())(
-        "languages", @["Python", "Ruby", "C", "CPP"])(
-        "skills", B(
-            "C++", 10)(
-            "Python", 20'i32)
-        )
-    c.insert(doc)
-
-    ## Test multiple document insertion
-    let docs = @[initBsonDocument()("balance", 100.23), initBsonDocument()("balance", 15'i32)]
-    c.insert(docs, continueOnError=true)
-
-    ## Test update
-    c.update(
-        B("balance", 15),
-        B("$set", B("balance", "UPDATED"))
-    )
-
-    ## Test document removal
-    c.remove(B("balance", 100.23))
-
-    return true
-
-  if unittest():
-    echo "TEST SUCCESS!"
+    return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
