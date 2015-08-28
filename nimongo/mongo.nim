@@ -24,6 +24,9 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
     OP_DELETE       = 2006'i32 ##
     OP_KILL_CURSORS = 2007'i32 ##
 
+const
+    ContinueOnError: int32 = 1
+
 converter toInt32(ok: OperationKind): int32 =
     return ok.int32
 
@@ -155,7 +158,7 @@ proc insert*(c: Collection, document: Bson): bool {.discardable.} =
 
     return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
-proc insert*(c: Collection, documents: seq[Bson]) =
+proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false) =
     ## Insert several new documents into MongoDB using one request
     assert len(documents) > 0
 
