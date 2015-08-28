@@ -85,12 +85,16 @@ proc initMongoMessageDelete(coll: string): MongoMessageDelete =
     )
 
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
-    ## Builds Mongo message header as a series of bytes
+    ## Build Mongo message header as a series of bytes
     return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
 
 proc buildMessageInsert(flags: int32, fullCollectionName: string): string =
-    ## builds Mongo insert messsage
+    ## Build Mongo insert messsage
     return int32ToBytes(flags) & fullCollectionName & char(0)
+
+proc buildMessageDelete(flags: int32, fullCollectionName: string): string =
+    ## Build Mongo delete message
+    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
 
 proc initMongoMessageUpdate(coll: string): MongoMessageUpdate =
     return MongoMessageUpdate(
@@ -139,7 +143,7 @@ proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
 
-proc connect(m: Mongo): bool =
+proc connect*(m: Mongo): bool =
     ## Connect socket to mongo server
     try:
         m.sock.connect(m.host, Port(m.port), -1)
@@ -168,17 +172,13 @@ proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false)
     if c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b)):
         echo "OP_INSERT multiple successfully sent!"
 
-proc remove*(c: Collection, selector: Bson) =
+proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
     ## Delete documents from MongoDB
-    var
-        msgHeader = initMongoMessageHeader(0, OP_DELETE)
-        msgDelete = initMongoMessageDelete($c)
     let
         sdoc = selector.bytes()
-    msgHeader.messageLength = int32(25 + len(msgDelete.fullCollectionName) + sdoc.len())
+        msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), nextRequestId(), 0, OP_DELETE)
 
-    if c.client.sock.trySend($msgHeader & $msgDelete & sdoc):
-        echo "OP_DELETE successfully sent!"
+    return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
 
 proc update*(c: Collection, selector: Bson, update: Bson) =
     ## Update MongoDB documents
