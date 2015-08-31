@@ -53,6 +53,10 @@ type
         db:     Database
         client: Mongo
 
+    MongoQuery* = ref object ## MongoDB configurable query object (lazy)
+        slaveOk*:     bool
+        allowPartial: bool
+
 proc nextRequestId(m: Mongo): int32 =
     ## Return next request id for current MongoDB client
     {.locks: [m.requestLock].}:
@@ -165,5 +169,5 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
 
     return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
-proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): seq[Bson] =
+proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): MongoQuery =
     ## Query documents from MongoDB
