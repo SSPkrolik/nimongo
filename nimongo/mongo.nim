@@ -53,9 +53,11 @@ type
         db:     Database
         client: Mongo
 
-    MongoQuery* = ref object ## MongoDB configurable query object (lazy)
-        slaveOk*:     bool
-        allowPartial: bool
+    Find* = ref object ## MongoDB configurable query object (lazy find)
+        collection: Collection
+        selector: Bson
+        fields: seq[string]
+        queryFlags:  int32
 
 proc nextRequestId(m: Mongo): int32 =
     ## Return next request id for current MongoDB client
@@ -63,23 +65,50 @@ proc nextRequestId(m: Mongo): int32 =
         m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
         return m.requestId
 
+proc newFind(c: Collection): Find =
+    ## Private constructor for the Find object. Find acts by taking
+    ## client settings (flags) that can be overriden when actual
+    ## query is performed.
+    result.new
+    result.collection = c
+    result.fields = @[]
+    result.queryFlags = c.client.queryFlags
+
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
-    ## Mongo constructor
+    ## Mongo client constructor
     result.new
     result.host = host
     result.port = port
     result.requestID = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
+proc tailableCursor(m: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disable tailable behaviour for the cursor (cursor is not
+    ## removed immediately after the query)
+    m.queryFlags = if enable: m.queryFlags or TailableCursor else: m.queryFlags and (not TailableCursor)
+
 proc slaveOk*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable querying from slaves in replica sets
     m.queryFlags = if enable: m.queryFlags or SlaveOk else: m.queryFlags and (not SlaveOk)
     return m
 
+proc tailableCursor(f: Find, enable: bool = true): Find {.discardable.} =
+    ##
+    f.queryFlags = if enable: f.queryFlags or TailableCursor else: f.queryFlags and (not TailableCursor)
+
+proc slaveOk*(f: Find, enable: bool = true): Find {.discardable.} =
+    ## Enable/disable querying from slaves in replica sets
+    f.queryFlags = if enable: f.queryFlags or SlaveOk else: f.queryFlags and (not SlaveOk)
+
 proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
     ## Enable/disable allowance for partial data retrieval from mongos when
     ## one or more shards are down.
     m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
+
+proc allowPartial*(f: Find, enable: bool = true): Find {.discardable.} =
+    ## Enable/disable allowance for partial data retrieval from mongo when
+    ## on or more shards are down.
+    f.queryFlags = if enable: f.queryFlags or Partial else: f.queryFlags and (not Partial)
 
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
     ## Build Mongo message header as a series of bytes
@@ -169,5 +198,20 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
 
     return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
-proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): MongoQuery =
-    ## Query documents from MongoDB
+proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): Find =
+    ## Create lazy query object to MongoDB that can be actually run
+    ## by one of the Find object procedures: `one()` or `all()`.
+    result = c.newFind()
+    result.selector = selector
+    result.fields = fields
+
+    result = nil
+
+proc one*(f: Find): Bson =
+    ## Perform MongoDB query and return first matching document
+
+proc all*(f: Find): seq[Bson] =
+    ## Perform MongoDB query and return all matching documents
+
+iterator items*(f: Find): Bson =
+    ## Perform MongoDB query and return iterator for all matching documents
