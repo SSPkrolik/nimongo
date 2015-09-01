@@ -190,6 +190,13 @@ proc initBsonDocument*(): Bson =
 
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte stream
+    let
+        stream: Stream = newStringStream(bytes)
+        docSize: int32 = stream.readInt32()
+
+    let parseBson = proc(bytes: string, doc: Bson) =
+        discard
+
     return initBsonDocument()
 
 proc initBsonArray*(): Bson =
