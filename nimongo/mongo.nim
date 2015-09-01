@@ -256,6 +256,14 @@ proc allowPartial*(f: Find, enable: bool = true): Find {.discardable.} =
     result = f
     f.queryFlags = if enable: f.queryFlags or Partial else: f.queryFlags and (not Partial)
 
+proc skip*(f: Find, numDocuments: int): Find {.discardable.} =
+    ## Specify number of documents from return sequence to skip
+    result = f
+
+proc limit*(f: Find, numLimit: int): Find {.discardable.} =
+    ## Specify number of documents to return from database
+    result = f
+
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
 
