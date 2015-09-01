@@ -59,6 +59,8 @@ type
         fields: seq[string]
         queryFlags:  int32
 
+# === Private APIs === #
+
 proc nextRequestId(m: Mongo): int32 =
     ## Return next request id for current MongoDB client
     {.locks: [m.requestLock].}:
@@ -74,6 +76,28 @@ proc newFind(c: Collection): Find =
     result.fields = @[]
     result.queryFlags = c.client.queryFlags
 
+proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
+    ## Build Mongo message header as a series of bytes
+    return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
+
+proc buildMessageInsert(flags: int32, fullCollectionName: string): string =
+    ## Build Mongo insert messsage
+    return int32ToBytes(flags) & fullCollectionName & char(0)
+
+proc buildMessageDelete(flags: int32, fullCollectionName: string): string =
+    ## Build Mongo delete message
+    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
+
+proc buildMessageUpdate(flags: int32, fullCollectionName: string): string =
+    ## Build Mongo update message
+    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
+
+proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: int32, numberToReturn: int32): string =
+    ## Build Mongo query message
+    return int32ToBytes(flags) & fullCollectionName & char(0) & int32ToBytes(numberToSkip) & int32ToBytes(numberToReturn)
+
+# === Mongo client API === #
+
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     ## Mongo client constructor
     result.new
@@ -82,7 +106,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.requestID = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
-proc tailableCursor(m: Mongo, enable: bool = true): Mongo {.discardable.} =
+proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
     ## removed immediately after the query)
     result = m
@@ -107,69 +131,13 @@ proc exhaust*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disabel exhaust flag which forces database to giveaway
     ## all data for the query in form of "get more" packages.
     result = m
+    m.queryFlags = if enable: m.queryFlags or Exhaust else: m.queryFlags and (not Exhaust)
 
 proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
     ## Enable/disable allowance for partial data retrieval from mongos when
     ## one or more shards are down.
     result = m
     m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
-
-proc tailableCursor(f: Find, enable: bool = true): Find {.discardable.} =
-    ## Enable/disable tailable behaviour for the cursor (cursor is not
-    ## removed immediately after the query)
-    f.queryFlags = if enable: f.queryFlags or TailableCursor else: f.queryFlags and (not TailableCursor)
-
-proc slaveOk*(f: Find, enable: bool = true): Find {.discardable.} =
-    ## Enable/disable querying from slaves in replica sets
-    f.queryFlags = if enable: f.queryFlags or SlaveOk else: f.queryFlags and (not SlaveOk)
-
-proc allowPartial*(f: Find, enable: bool = true): Find {.discardable.} =
-    ## Enable/disable allowance for partial data retrieval from mongo when
-    ## on or more shards are down.
-    f.queryFlags = if enable: f.queryFlags or Partial else: f.queryFlags and (not Partial)
-
-proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
-    ## Build Mongo message header as a series of bytes
-    return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
-
-proc buildMessageInsert(flags: int32, fullCollectionName: string): string =
-    ## Build Mongo insert messsage
-    return int32ToBytes(flags) & fullCollectionName & char(0)
-
-proc buildMessageDelete(flags: int32, fullCollectionName: string): string =
-    ## Build Mongo delete message
-    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
-
-proc buildMessageUpdate(flags: int32, fullCollectionName: string): string =
-    ## Build Mongo update message
-    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
-
-proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: int32, numberToReturn: int32): string =
-    ## Build Mongo query message
-    return int32ToBytes(flags) & fullCollectionName & char(0) & int32ToBytes(numberToSkip) & int32ToBytes(numberToReturn)
-
-proc `$`*(c: Collection): string =
-    ## String representation of collection name
-    return c.db.name & "." & c.name
-
-proc `$`*(db: Database): string = db.name  ## Database name
-
-proc `[]`*(m: Mongo, dbName: string): Database =
-    ## Retrieves database from Mongo
-    result.new
-    result.name = dbName
-    result.client = m
-
-proc `[]`*(db: Database, collectionName: string): Collection =
-    ## Retrieves collection from Mongo Database
-    result.new
-    result.name = collectionName
-    result.client = db.client
-    result.db = db
-
-proc `$`*(m: Mongo): string =
-    ## Return full DSN for the Mongo connection
-    return "mongodb://$#:$#" % [m.host, $m.port]
 
 proc connect*(m: Mongo): bool =
     ## Connect socket to mongo server
@@ -178,6 +146,35 @@ proc connect*(m: Mongo): bool =
     except OSError:
         return false
     return true
+
+proc `[]`*(m: Mongo, dbName: string): Database =
+    ## Retrieves database from Mongo
+    result.new
+    result.name = dbName
+    result.client = m
+
+proc `$`*(m: Mongo): string =
+    ## Return full DSN for the Mongo connection
+    return "mongodb://$#:$#" % [m.host, $m.port]
+
+# === Database API === #
+
+proc `$`*(db: Database): string =
+    ## Database name string representation
+    return db.name
+
+proc `[]`*(db: Database, collectionName: string): Collection =
+    ## Retrieves collection from Mongo Database
+    result.new
+    result.name = collectionName
+    result.client = db.client
+    result.db = db
+
+# === Collection API === #
+
+proc `$`*(c: Collection): string =
+    ## String representation of collection name
+    return c.db.name & "." & c.name
 
 proc insert*(c: Collection, document: Bson): bool {.discardable.} =
     ## Insert new document into MongoDB
@@ -223,6 +220,41 @@ proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): Find =
     result.selector = selector
     result.fields = fields
     result = nil
+
+## === Find API === ##
+
+proc tailableCursor*(f: Find, enable: bool = true): Find {.discardable.} =
+    ## Enable/disable tailable behaviour for the cursor (cursor is not
+    ## removed immediately after the query)
+    result = f
+    f.queryFlags = if enable: f.queryFlags or TailableCursor else: f.queryFlags and (not TailableCursor)
+
+proc slaveOk*(f: Find, enable: bool = true): Find {.discardable.} =
+    ## Enable/disable querying from slaves in replica sets
+    result = f
+    f.queryFlags = if enable: f.queryFlags or SlaveOk else: f.queryFlags and (not SlaveOk)
+
+proc noCursorTimeout*(f: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disable cursor idle timeout
+    result = f
+    f.queryFlags = if enable: f.queryFlags or NoCursorTimeout else: f.queryFlags and (not NoCursorTimeout)
+
+proc awaitData*(f: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disable data waiting behaviour (along with tailable cursor)
+    result = f
+    f.queryFlags = if enable: f.queryFlags or AwaitData else: f.queryFlags and (not AwaitData)
+
+proc exhaust*(f: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disabel exhaust flag which forces database to giveaway
+    ## all data for the query in form of "get more" packages.
+    result = f
+    f.queryFlags = if enable: f.queryFlags or Exhaust else: f.queryFlags and (not Exhaust)
+
+proc allowPartial*(f: Find, enable: bool = true): Find {.discardable.} =
+    ## Enable/disable allowance for partial data retrieval from mongo when
+    ## on or more shards are down.
+    result = f
+    f.queryFlags = if enable: f.queryFlags or Partial else: f.queryFlags and (not Partial)
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
