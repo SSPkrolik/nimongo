@@ -6,6 +6,7 @@ import locks
 import oids
 import sequtils
 import sockets
+import streams
 import strutils
 import tables
 import unsigned
@@ -25,12 +26,18 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
     OP_KILL_CURSORS = 2007'i32 ##
 
 const
-    TailableCursor   = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
-    SlaveOk          = 1'i32 shl 2 ## Allow to query replica set slaves
-    NoCursorTimeout  = 1'i32 shl 4 ##
-    AwaitData        = 1'i32 shl 5 ##
-    Exhaust          = 1'i32 shl 6 ##
-    Partial          = 1'i32 shl 7 ## Get info only from running shards
+    TailableCursor  = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
+    SlaveOk         = 1'i32 shl 2 ## Allow to query replica set slaves
+    NoCursorTimeout = 1'i32 shl 4 ##
+    AwaitData       = 1'i32 shl 5 ##
+    Exhaust         = 1'i32 shl 6 ##
+    Partial         = 1'i32 shl 7 ## Get info only from running shards
+
+const
+    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
+    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
+    # ShardConfigState = 1'i32 shl 2 ## (used by mongos)
+    AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
 
 converter toInt32(ok: OperationKind): int32 =  ## Convert OperationKind ot int32
     return ok.int32
@@ -105,6 +112,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.port = port
     result.requestID = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
+    result.queryFlags = 0
 
 proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
@@ -219,7 +227,6 @@ proc find*(c: Collection, query: Bson, fields: seq[string] = @[]): Find =
     result = c.newFind()
     result.query = query
     result.fields = fields
-    result = nil
 
 # === Find API === #
 
@@ -264,29 +271,54 @@ proc limit*(f: Find, numLimit: int): Find {.discardable.} =
     ## Specify number of documents to return from database
     result = f
 
-proc perfromFind(f: Find): Find =
+proc performFind(f: Find): Find =
     ## Private procedure for performing actual query to Mongo
     var bfields: Bson = initBsonDocument()
-    for field in f.fields.items():
-        bfields = bfields(field, 1'i32)
+    if f.fields.len() > 0:
+        for field in f.fields.items():
+            bfields = bfields(field, 1'i32)
     let
         squery = f.query.bytes()
         sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
         msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
 
-    if f.collection.client.sock.trySend(msgHeader & buildMessageQuery(0, $(f.collection), 0 , -1)):
-        var
-            data: string = nil
-            received: int = f.collection.client.sock.recv(data, 1024)
+    let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , -1) & squery & sfields
+
+    if f.collection.client.sock.trySend(dataToSend):
+        var data: string = newStringOfCap(4)
+        var received: int = f.collection.client.sock.recv(data, 4)
+        var stream: Stream = newStringStream(data)
 
         ## Log response
+        echo "Received: " & $received
         for i in data:
-            stdout.write(ord(i))
+            stdout.write(ord(i), " ")
         echo ""
 
-        ## Read response (OP_REPLY)
-        while received > 0:
-            received = 0
+        ## Read data
+        let messageLength: int32 = stream.readInt32()
+        echo "Received: $# bytes" % [$messageLength]
+
+        data = newStringOfCap(messageLength - 4)
+        received = f.collection.client.sock.recv(data, messageLength - 4)
+        stream = newStringStream(data)
+
+        let requestID: int32 = stream.readInt32()
+        let responseTo: int32 = stream.readInt32()
+        let opCode: OperationKind = stream.readInt32().OperationKind
+        let responseFlags: int32 = stream.readInt32()
+        let cursorID: int64 = stream.readInt64()
+        let startingFrom: int32 = stream.readInt32()
+        let numberReturned: int32 = stream.readInt32()
+
+        echo("Request ID: ", requestID)
+        echo("Response To: ", responseTo)
+        echo("opCode: ", opCode)
+        echo("ResponseFlags: ", responseFlags)
+        echo("Cursor ID: ", cursorID)
+        echo("Starting from: ", startingFrom)
+        echo("Number returned: ", numberReturned)
+
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
@@ -296,3 +328,11 @@ proc one*(f: Find): Bson =
 
 iterator items*(f: Find): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
+
+
+when isMainModule:
+    let m: Mongo = newMongo()
+    discard m.connect()
+
+    let res: Find = m["db"]["collection"].find(B("double", 3.1415), @["double"]).performFind()
+    echo "!"
