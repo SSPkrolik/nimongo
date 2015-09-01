@@ -85,25 +85,43 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
 proc tailableCursor(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
     ## removed immediately after the query)
+    result = m
     m.queryFlags = if enable: m.queryFlags or TailableCursor else: m.queryFlags and (not TailableCursor)
 
 proc slaveOk*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable querying from slaves in replica sets
+    result = m
     m.queryFlags = if enable: m.queryFlags or SlaveOk else: m.queryFlags and (not SlaveOk)
-    return m
+
+proc noCursorTimeout*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disable cursor idle timeout
+    result = m
+    m.queryFlags = if enable: m.queryFlags or NoCursorTimeout else: m.queryFlags and (not NoCursorTimeout)
+
+proc awaitData*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disable data waiting behaviour (along with tailable cursor)
+    result = m
+    m.queryFlags = if enable: m.queryFlags or AwaitData else: m.queryFlags and (not AwaitData)
+
+proc exhaust*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
+    ## Enable/disabel exhaust flag which forces database to giveaway
+    ## all data for the query in form of "get more" packages.
+    result = m
+
+proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
+    ## Enable/disable allowance for partial data retrieval from mongos when
+    ## one or more shards are down.
+    result = m
+    m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
 
 proc tailableCursor(f: Find, enable: bool = true): Find {.discardable.} =
-    ##
+    ## Enable/disable tailable behaviour for the cursor (cursor is not
+    ## removed immediately after the query)
     f.queryFlags = if enable: f.queryFlags or TailableCursor else: f.queryFlags and (not TailableCursor)
 
 proc slaveOk*(f: Find, enable: bool = true): Find {.discardable.} =
     ## Enable/disable querying from slaves in replica sets
     f.queryFlags = if enable: f.queryFlags or SlaveOk else: f.queryFlags and (not SlaveOk)
-
-proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
-    ## Enable/disable allowance for partial data retrieval from mongos when
-    ## one or more shards are down.
-    m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
 
 proc allowPartial*(f: Find, enable: bool = true): Find {.discardable.} =
     ## Enable/disable allowance for partial data retrieval from mongo when
@@ -204,14 +222,13 @@ proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): Find =
     result = c.newFind()
     result.selector = selector
     result.fields = fields
-
     result = nil
-
-proc one*(f: Find): Bson =
-    ## Perform MongoDB query and return first matching document
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
+
+proc one*(f: Find): Bson =
+    ## Perform MongoDB query and return first matching document
 
 iterator items*(f: Find): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
