@@ -221,7 +221,7 @@ proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): Find =
     result.fields = fields
     result = nil
 
-## === Find API === ##
+# === Find API === #
 
 proc tailableCursor*(f: Find, enable: bool = true): Find {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
@@ -262,6 +262,10 @@ proc skip*(f: Find, numDocuments: int): Find {.discardable.} =
 
 proc limit*(f: Find, numLimit: int): Find {.discardable.} =
     ## Specify number of documents to return from database
+    result = f
+
+proc perfromFind(f: Find): Find =
+    ## Private procedure for performing actual query to Mongo
     result = f
 
 proc all*(f: Find): seq[Bson] =
