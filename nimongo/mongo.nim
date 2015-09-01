@@ -271,7 +271,7 @@ proc limit*(f: Find, numLimit: int): Find {.discardable.} =
     ## Specify number of documents to return from database
     result = f
 
-proc performFind(f: Find): Find =
+iterator performFind(f: Find): Bson {.closure.} =
     ## Private procedure for performing actual query to Mongo
     var bfields: Bson = initBsonDocument()
     if f.fields.len() > 0:
@@ -319,20 +319,35 @@ proc performFind(f: Find): Find =
         echo("Starting from: ", startingFrom)
         echo("Number returned: ", numberReturned)
 
+        if numberReturned > 0:
+            for i in 0..<numberReturned:
+                let docSize = stream.readInt32()
+                stream.setPosition(stream.getPosition() - 4)
+                let sdoc: string = stream.readStr(docSize)
+                echo sdoc
+                yield initBsonDocument(sdoc)
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
+    result = @[]
+    for doc in f.performFind():
+        result.add(doc)
 
 proc one*(f: Find): Bson =
     ## Perform MongoDB query and return first matching document
+    var iter = performFind
+    return f.iter()
 
 iterator items*(f: Find): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
-
+    for doc in f.performFind():
+        yield doc
 
 when isMainModule:
     let m: Mongo = newMongo()
     discard m.connect()
 
-    let res: Find = m["db"]["collection"].find(B("double", 3.1415), @["double"]).performFind()
+    let res: Find = m["db"]["collection"].find(B("double", 3.1415), @["double"])
+    echo res.one()
+
     echo "!"

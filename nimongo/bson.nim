@@ -188,6 +188,10 @@ proc initBsonDocument*(): Bson =
         valueDocument: newSeq[Bson]()
     )
 
+proc initBsonDocument*(bytes: string): Bson =
+    ## Create new Bson document from byte stream
+    return initBsonDocument()
+
 proc initBsonArray*(): Bson =
     ## Create new Bson array
     result = Bson(
