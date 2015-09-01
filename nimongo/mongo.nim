@@ -55,9 +55,9 @@ type
 
     Find* = ref object ## MongoDB configurable query object (lazy find)
         collection: Collection
-        selector: Bson
-        fields: seq[string]
-        queryFlags:  int32
+        query:      Bson
+        fields:     seq[string]
+        queryFlags: int32
 
 # === Private APIs === #
 
@@ -213,11 +213,11 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
 
     return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
-proc find*(c: Collection, selector: Bson, fields: seq[string] = @[]): Find =
+proc find*(c: Collection, query: Bson, fields: seq[string] = @[]): Find =
     ## Create lazy query object to MongoDB that can be actually run
     ## by one of the Find object procedures: `one()` or `all()`.
     result = c.newFind()
-    result.selector = selector
+    result.query = query
     result.fields = fields
     result = nil
 
@@ -266,7 +266,27 @@ proc limit*(f: Find, numLimit: int): Find {.discardable.} =
 
 proc perfromFind(f: Find): Find =
     ## Private procedure for performing actual query to Mongo
-    result = f
+    var bfields: Bson = initBsonDocument()
+    for field in f.fields.items():
+        bfields = bfields(field, 1'i32)
+    let
+        squery = f.query.bytes()
+        sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
+        msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
+
+    if f.collection.client.sock.trySend(msgHeader & buildMessageQuery(0, $(f.collection), 0 , -1)):
+        var
+            data: string = nil
+            received: int = f.collection.client.sock.recv(data, 1024)
+
+        ## Log response
+        for i in data:
+            stdout.write(ord(i))
+        echo ""
+
+        ## Read response (OP_REPLY)
+        while received > 0:
+            received = 0
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
