@@ -234,17 +234,17 @@ proc slaveOk*(f: Find, enable: bool = true): Find {.discardable.} =
     result = f
     f.queryFlags = if enable: f.queryFlags or SlaveOk else: f.queryFlags and (not SlaveOk)
 
-proc noCursorTimeout*(f: Mongo, enable: bool = true): Mongo {.discardable.} =
+proc noCursorTimeout*(f: Find, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable cursor idle timeout
     result = f
     f.queryFlags = if enable: f.queryFlags or NoCursorTimeout else: f.queryFlags and (not NoCursorTimeout)
 
-proc awaitData*(f: Mongo, enable: bool = true): Mongo {.discardable.} =
+proc awaitData*(f: Find, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable data waiting behaviour (along with tailable cursor)
     result = f
     f.queryFlags = if enable: f.queryFlags or AwaitData else: f.queryFlags and (not AwaitData)
 
-proc exhaust*(f: Mongo, enable: bool = true): Mongo {.discardable.} =
+proc exhaust*(f: Find, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disabel exhaust flag which forces database to giveaway
     ## all data for the query in form of "get more" packages.
     result = f
