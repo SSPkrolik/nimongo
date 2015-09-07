@@ -44,4 +44,7 @@ collection.update(B("name", "John"), B("$set", B("surname", "Smith")))
 
 ## Delete document
 collection.remove(B("name", "John"))
+
+## Fetch one document from DB
+let fetched = collection.find(B("name", "John"), @["name"]).one()
 ```
