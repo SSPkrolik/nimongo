@@ -347,7 +347,9 @@ when isMainModule:
     let m: Mongo = newMongo()
     discard m.connect()
 
-    let res: Find = m["db"]["collection"].find(B("double", 3.1415), @["double"])
+    let collection = m["db"]["collection"]
+    echo "Collection: ", collection
+    let res: Find = collection.find(B("integer", 200)).exhaust()
     echo res.one()
 
     echo "!"
