@@ -30,7 +30,13 @@ type BsonKind* = enum
     BsonKindMaximumKey      = 0x7F.char
     BsonKindMinimumKey      = 0xFF.char
 
-converter toChar*(bk: BsonKind): char = bk.char  ## Convert BsonKind to char
+converter toChar*(bk: BsonKind): char =
+    ## Convert BsonKind to char
+    return bk.char
+
+converter toBsonKind*(c: char): BsonKind =
+    ## Convert char to BsonKind
+    return c.BsonKind
 
 # ------------- type: Bson -----------------------#
 
@@ -188,17 +194,6 @@ proc initBsonDocument*(): Bson =
         valueDocument: newSeq[Bson]()
     )
 
-proc initBsonDocument*(bytes: string): Bson =
-    ## Create new Bson document from byte stream
-    let
-        stream: Stream = newStringStream(bytes)
-        docSize: int32 = stream.readInt32()
-
-    let parseBson = proc(bytes: string, doc: Bson) =
-        discard
-
-    return initBsonDocument()
-
 proc initBsonArray*(): Bson =
     ## Create new Bson array
     result = Bson(
@@ -245,6 +240,45 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
         inc(counter)
 
     result.valueDocument.add(arr)
+
+proc initBsonDocument*(bytes: string): Bson =
+    ## Create new Bson document from byte stream
+    let
+        stream: Stream = newStringStream(bytes)
+        docSize: int32 = stream.readInt32()
+    var document: Bson = Bson(key: "", kind: BsonKindDocument, valueDocument: @[])
+
+    let parseBson = proc(s: Stream, doc: var Bson, size: int32) =
+        let kind: BsonKind = s.readChar()
+        var name: TaintedString = ""
+        discard s.readLine(name)
+        case kind:
+        of BsonKindDouble:
+            doc = doc(name.string, s.readFloat64())
+        of BsonKindStringUTF8:
+            doc = doc(name.string, s.readLine().string)
+        of BsonKindDocument:
+            let ds: int32 = stream.readInt32()
+            doc = doc(name.string, initBsonDocument(s.readStr(ds)))
+        of BsonKindArray:
+            let ds: int32 = stream.readInt32()
+            doc = doc(name.string, initBsonDocument(s.readStr(ds)))
+            ## TODO: make array from object
+        of BsonKindOid:
+            doc = doc(name.string, parseOid(s.readStr(12)))
+        of BsonKindBool:
+            doc = doc(name.string, if s.readChar() == 0.char: false else: true)
+        of BsonKindNull:
+            doc = doc(name.string, null())
+        of BsonKindInt32:
+            doc = doc(name.string, s.readInt32())
+        of BsonKindInt64:
+            doc = doc(name.string, s.readInt64())
+        else:
+            raise new(Exception)
+
+    return initBsonDocument()
+
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
