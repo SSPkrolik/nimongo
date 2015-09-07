@@ -1,4 +1,6 @@
+import oids
 import unittest
+
 import nimongo.bson
 import nimongo.mongo
 
@@ -43,3 +45,12 @@ suite "Mongo client test suite":
         let
             doc = B("string", "hello")
         check(c.remove(doc) == true)
+
+    test "Query single document":
+        let myId = genOid()
+        let doc = B("string", "somedoc")("myid", myId)
+
+        check(c.insert(doc))
+
+        let res = c.find(B("myid", myId)).one()
+        check($toOid(res["myid"]) == $myId)

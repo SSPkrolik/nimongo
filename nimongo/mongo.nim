@@ -271,7 +271,7 @@ proc limit*(f: Find, numLimit: int): Find {.discardable.} =
     ## Specify number of documents to return from database
     result = f
 
-iterator performFind(f: Find): Bson {.closure.} =
+iterator performFind(f: Find, numberToReturn: int32): Bson {.closure.} =
     ## Private procedure for performing actual query to Mongo
     var bfields: Bson = initBsonDocument()
     if f.fields.len() > 0:
@@ -282,22 +282,15 @@ iterator performFind(f: Find): Bson {.closure.} =
         sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
         msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
 
-    let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , 0) & squery & sfields
+    let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
 
     if f.collection.client.sock.trySend(dataToSend):
         var data: string = newStringOfCap(4)
         var received: int = f.collection.client.sock.recv(data, 4)
         var stream: Stream = newStringStream(data)
 
-        ## Log response
-        echo "Received: " & $received
-        for i in data:
-            stdout.write(ord(i), " ")
-        echo ""
-
         ## Read data
         let messageLength: int32 = stream.readInt32()
-        echo "Received: $# bytes" % [$messageLength]
 
         data = newStringOfCap(messageLength - 4)
         received = f.collection.client.sock.recv(data, messageLength - 4)
@@ -311,36 +304,27 @@ iterator performFind(f: Find): Bson {.closure.} =
         let startingFrom: int32 = stream.readInt32()
         let numberReturned: int32 = stream.readInt32()
 
-        echo("Request ID: ", requestID)
-        echo("Response To: ", responseTo)
-        echo("opCode: ", opCode)
-        echo("ResponseFlags: ", responseFlags)
-        echo("Cursor ID: ", cursorID)
-        echo("Starting from: ", startingFrom)
-        echo("Number returned: ", numberReturned)
-
         if numberReturned > 0:
             for i in 0..<numberReturned:
                 let docSize = stream.readInt32()
                 stream.setPosition(stream.getPosition() - 4)
                 let sdoc: string = stream.readStr(docSize)
-                echo sdoc
                 yield initBsonDocument(sdoc)
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
     result = @[]
-    for doc in f.performFind():
+    for doc in f.performFind(0):
         result.add(doc)
 
 proc one*(f: Find): Bson =
     ## Perform MongoDB query and return first matching document
     var iter = performFind
-    return f.iter()
+    return f.iter(1)
 
 iterator items*(f: Find): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
-    for doc in f.performFind():
+    for doc in f.performFind(0):
         yield doc
 
 when isMainModule:
@@ -350,6 +334,6 @@ when isMainModule:
     let collection = m["db"]["collection"]
     echo "Collection: ", collection
     let res: Find = collection.find(B("integer", 200)).exhaust()
-    echo res.all()
 
-    echo "!"
+    for doc in res.items():
+        stdout.write(doc)

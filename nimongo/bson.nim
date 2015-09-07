@@ -12,7 +12,7 @@ type BsonKind* = enum
     BsonKindDouble          = 0x01.char  ## 64-bit floating-point
     BsonKindStringUTF8      = 0x02.char  ## UTF-8 encoded C string
     BsonKindDocument        = 0x03.char  ## Embedded document
-    BsonKindArray           = 0x04.char
+    BsonKindArray           = 0x04.char  ## Embedded array of Bson values
     BsonKindBinary          = 0x05.char
     BsonKindUndefined       = 0x06.char
     BsonKindOid             = 0x07.char  ## Mongo Object ID
@@ -44,19 +44,35 @@ type
     Bson* = object of RootObj  ## Bson Node
         key: string
         case kind: BsonKind
-        of BsonKindGeneric:    discard
-        of BsonKindDouble:     valueFloat64:  float64    ## +
-        of BsonKindStringUTF8: valueString:   string     ## +
-        of BsonKindDocument:   valueDocument: seq[Bson]  ## +
-        of BsonKindArray:      valueArray:    seq[Bson]
-        of BsonKindBinary:     valueBinary:   cstring
-        of BsonKindUndefined:  discard
-        of BsonKindOid:        valueOid:      Oid
-        of BsonKindBool:       valueBool:     bool
-        of BsonKindNull:       discard
-        of BsonKindInt32:      valueInt32:    int32
-        of BsonKindInt64:      valueInt64:    int64
-        else: discard
+        of BsonKindGeneric:         discard
+        of BsonKindDouble:          valueFloat64:   float64
+        of BsonKindStringUTF8:      valueString:    string
+        of BsonKindDocument:        valueDocument:  seq[Bson]
+        of BsonKindArray:           valueArray:     seq[Bson]
+        of BsonKindBinary:          valueBinary:    string
+        of BsonKindUndefined:       discard
+        of BsonKindOid:             valueOid:       Oid
+        of BsonKindBool:            valueBool:      bool
+        of BsonKindTimeUTC:         valueDateTime:  int64
+        of BsonKindNull:            discard
+        of BsonKindRegexp:
+                                    expr1:          string
+                                    expr2:          string
+        of BsonKindDBPointer:       discard
+        of BsonKindJSCode:          valueCode:      string
+        of BsonKindDeprecated:      valueDepr:      string
+        of BsonKindJSCodeWithScope: valueCodeWS:    string
+        of BsonKindInt32:           valueInt32:     int32
+        of BsonKindTimestamp:       valueTimestamp: int64
+        of BsonKindInt64:           valueInt64:     int64
+        of BsonKindMaximumKey:      discard
+        of BsonKindMinimumKey:      discard
+        else:                       discard
+
+
+converter toOid*(x: Bson): Oid =
+    ## Convert Bson to Mongo Object ID
+    return x.valueOid
 
 converter toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
@@ -245,6 +261,22 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
 
     result.valueDocument.add(arr)
 
+proc `[]`*(bs: Bson, key: string): Bson =
+    ## Get Bson document field
+    if bs.kind == BsonKindDocument:
+        for item in bs.valueDocument:
+            if item.key == key:
+                return item
+    else:
+        raise new(Exception)
+
+proc `[]`*(bs: Bson, key: int): Bson =
+    ## Get Bson array item by index
+    if bs.kind == BsonKindArray:
+        return bs.valueArray[key]
+    else:
+        raise new(Exception)
+
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte stream
     let
@@ -267,7 +299,6 @@ proc initBsonDocument*(bytes: string): Bson =
             let ds: int32 = stream.readInt32()
             s.setPosition(s.getPosition() - 4)
             var subdoc = initBsonDocument(s.readStr(ds))
-            echo "S: ", subdoc
             return doc(name.string, subdoc)
         of BsonKindArray:
             let ds: int32 = stream.readInt32()
@@ -288,7 +319,6 @@ proc initBsonDocument*(bytes: string): Bson =
         of BsonKindInt64:
             return doc(name.string, s.readInt64())
         else:
-            echo "Kind: ", kind
             raise new(Exception)
 
     while stream.readChar() != 0.char:
