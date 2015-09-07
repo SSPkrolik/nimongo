@@ -156,13 +156,9 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
         of BsonKindOid:
             return "\"$#\": ObjectId(\"$#\")" % [bs.key, $bs.valueOid]
-        of BsonKindInt32:
-            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
-        of BSonKindInt64:
-            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
         of BsonKindArray:
             var res: string = ""
-            res = res & ident[0..len(ident) - 3] & bs.key & ": ["
+            res = res & "\"" & bs.key & "\": ["
             ident = ident & "  "
             for i, item in bs.valueArray:
                 if i == len(bs.valueArray) - 1: res = res & stringify(item)
@@ -182,6 +178,14 @@ proc `$`*(bs: Bson): string =
             ident = ident[0..len(ident) - 3]
             res = res & ident & "}"
             return res
+        of BsonKindBool:
+            return "\"$#\": $#" % [bs.key, if bs.valueBool == true: "true" else: "false"]
+        of BsonKindNull:
+            return "\"$#\": null" % [bs.key]
+        of BsonKindInt32:
+            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
+        of BSonKindInt64:
+            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
         else:
             raise new(Exception)
     return stringify(bs)
@@ -246,52 +250,70 @@ proc initBsonDocument*(bytes: string): Bson =
     let
         stream: Stream = newStringStream(bytes)
         docSize: int32 = stream.readInt32()
-    var document: Bson = Bson(key: "", kind: BsonKindDocument, valueDocument: @[])
+    var document: Bson = initBsonDocument()
 
-    let parseBson = proc(s: Stream, doc: var Bson, size: int32) =
+    let parseBson = proc(s: Stream, doc: Bson): Bson =
         let kind: BsonKind = s.readChar()
         var name: TaintedString = ""
         discard s.readLine(name)
         case kind:
         of BsonKindDouble:
-            doc = doc(name.string, s.readFloat64())
+            return doc(name.string, s.readFloat64())
         of BsonKindStringUTF8:
-            doc = doc(name.string, s.readLine().string)
+            let valueString: string = s.readStr(s.readInt32() - 1)
+            discard s.readChar()
+            return doc(name.string, valueString)
         of BsonKindDocument:
             let ds: int32 = stream.readInt32()
-            doc = doc(name.string, initBsonDocument(s.readStr(ds)))
+            s.setPosition(s.getPosition() - 4)
+            var subdoc = initBsonDocument(s.readStr(ds))
+            echo "S: ", subdoc
+            return doc(name.string, subdoc)
         of BsonKindArray:
             let ds: int32 = stream.readInt32()
-            doc = doc(name.string, initBsonDocument(s.readStr(ds)))
-            ## TODO: make array from object
+            s.setPosition(s.getPosition() - 4)
+            var subdoc = initBsonDocument(s.readStr(ds))
+            var subarr = initBsonArray()
+            subarr.valueArray = subdoc.valueDocument
+            return doc(name.string, subarr)
         of BsonKindOid:
-            doc = doc(name.string, parseOid(s.readStr(12)))
+            let valueOid: Oid = cast[Oid](s.readStr(12).cstring)
+            return doc(name.string, valueOid)
         of BsonKindBool:
-            doc = doc(name.string, if s.readChar() == 0.char: false else: true)
+            return doc(name.string, if s.readChar() == 0.char: false else: true)
         of BsonKindNull:
-            doc = doc(name.string, null())
+            return doc(name.string, null())
         of BsonKindInt32:
-            doc = doc(name.string, s.readInt32())
+            return doc(name.string, s.readInt32())
         of BsonKindInt64:
-            doc = doc(name.string, s.readInt64())
+            return doc(name.string, s.readInt64())
         else:
+            echo "Kind: ", kind
             raise new(Exception)
 
-    return initBsonDocument()
+    while stream.readChar() != 0.char:
+        stream.setPosition(stream.getPosition() - 1)
+        document = parseBson(stream, document)
 
+    return document
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
+    let oid = genOid()
     var bdoc: Bson = initBsonDocument()(
         "balance", 1000.23)(
         "name", "John")(
+        "someId", oid)(
+        "someTrue", true)(
         "surname", "Smith")(
+        "someNull", null())(
         "subdoc", initBsonDocument()(
-            "salary", 500.0
+            "salary", 500
+        )(
+        "array", @["hello", "wold"]
         )
     )
-    var bdoc2: Bson = initBsonDocument()("balance", 1000.23)
-    for i in bdoc2.bytes():
-        stdout.write(ord(i))
-        stdout.write(" ")
-    echo ""
+    echo bdoc
+    let bbytes = bdoc.bytes()
+    let recovered = initBsonDocument(bbytes)
+    echo "RECOVERED: ", recovered
