@@ -282,7 +282,7 @@ iterator performFind(f: Find): Bson {.closure.} =
         sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
         msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
 
-    let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , -1) & squery & sfields
+    let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , 0) & squery & sfields
 
     if f.collection.client.sock.trySend(dataToSend):
         var data: string = newStringOfCap(4)
@@ -350,6 +350,6 @@ when isMainModule:
     let collection = m["db"]["collection"]
     echo "Collection: ", collection
     let res: Find = collection.find(B("integer", 200)).exhaust()
-    echo res.one()
+    echo res.all()
 
     echo "!"
