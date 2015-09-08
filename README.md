@@ -21,6 +21,7 @@ Usage
 
 ```nim
 import oids
+
 import nimongo.bson  ## MongoDB BSON serialization/deserialization
 import nimongo.mongo ## MongoDB clinet
 

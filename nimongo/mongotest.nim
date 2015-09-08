@@ -53,4 +53,5 @@ suite "Mongo client test suite":
         check(c.insert(doc))
 
         let res = c.find(B("myid", myId)).one()
-        check($toOid(res["myid"]) == $myId)
+        let myIdFromDb: Oid = res["myid"]
+        check($myIdFromDb == $myId)
