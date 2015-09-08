@@ -54,4 +54,4 @@ suite "Mongo client test suite":
 
         let res = c.find(B("myid", myId)).one()
         let myIdFromDb: Oid = res["myid"]
-        check($myIdFromDb == $myId)
+        check(myIdFromDb == myId)
