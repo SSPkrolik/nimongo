@@ -16,6 +16,9 @@ $ nimble install https://github.com/SSPkrolik/nimongo.git
 Later, when the driver becomes usable, `nimongo` will enter `nimble` package
 list.
 
+> WARNING! Current `master` version of `nimongo` works only with the
+> latest version of Nim from git repo: `devel` branch.
+
 Usage
 -----
 
