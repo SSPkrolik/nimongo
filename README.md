@@ -45,6 +45,13 @@ collection.update(B("name", "John"), B("$set", B("surname", "Smith")))
 ## Delete document
 collection.remove(B("name", "John"))
 
-## Fetch one document from DB
+## Fetch one document from DB returning only one field: "name".
 let fetched = collection.find(B("name", "John"), @["name"]).one()
+
+## Fetch all matching documents from DB receiving seq[Bson]
+let documents = collection.find(B("name", "John")).all()
+
+## Fetch all matching documents as a iterator
+for document in collection.find(B("name", "John")).items():
+    echo document
 ```
