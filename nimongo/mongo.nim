@@ -2,6 +2,7 @@
 when hostOs == "linux":
     {.passL: "-pthread".}
 
+import asyncnet
 import locks
 import oids
 import sequtils
@@ -39,17 +40,23 @@ const
     # ShardConfigState = 1'i32 shl 2 ## (used by mongos)
     AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
 
-converter toInt32(ok: OperationKind): int32 =  ## Convert OperationKind ot int32
+converter toInt32*(ok: OperationKind): int32 =
+    ## Convert OperationKind ot int32
     return ok.int32
 
 type
-    Mongo* = ref object ## Mongo represents connection to MongoDB server
-        requestLock: Lock
+    MongoBase = ref object of RootObj       ## Base Mongo client object
         requestId:   int32
         host:        string
         port:        uint16
-        sock:        Socket
         queryFlags:  int32
+
+    Mongo* = ref object of MongoBase        ## Synchrounous MongoDB client
+        requestLock: Lock
+        sock:        Socket
+
+    AsyncMongo* = ref object of MongoBase   ## Asynchronous MongoDB client
+        sock:        AsyncSocket
 
     Database* = ref object ## MongoDB database object
         name:   string
@@ -339,4 +346,4 @@ when isMainModule:
     let res: Find = collection.find(B("integer", 200)).exhaust()
 
     for doc in res.items():
-        stdout.write(doc)
+        stdout.write($doc, "\n")
