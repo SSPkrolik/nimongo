@@ -55,3 +55,18 @@ suite "Mongo client test suite":
         let res = c.find(B("myid", myId)).one()
         let myIdFromDb: Oid = res["myid"]
         check(myIdFromDb == myId)
+
+    test "Query multiple documents as a sequence":
+        let doc = B("string", "hello")
+        check(c.insert(doc))
+        check(c.insert(doc))
+        let docs = c.find(B("string", "hello")).all()
+        check(docs.len() > 1)
+
+    test "Query multiple documents as iterator":
+        let doc = B("string", "hello")
+        check(c.insert(doc))
+        check(c.insert(doc))
+        let request = c.find(B("string", "hello"))
+        for document in request.items():
+            check(document["string"] == "hello")

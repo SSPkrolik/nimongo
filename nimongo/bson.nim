@@ -78,6 +78,10 @@ converter toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
     return Bson(key: "", kind: BsonKindDouble, valueFloat64: x)
 
+converter toString*(x: Bson): string =
+    ## Convert Bson to UTF8 string
+    return x.valueString
+
 converter toBson*(x: string): Bson =
     ## Convert string to Bson object
     return Bson(key: "", kind: BsonKindStringUTF8, valueString: x)
