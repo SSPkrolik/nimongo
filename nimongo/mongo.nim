@@ -70,9 +70,8 @@ type
 
 proc nextRequestId(m: Mongo): int32 =
     ## Return next request id for current MongoDB client
-    {.locks: [m.requestLock].}:
-        m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
-        return m.requestId
+    m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
+    return m.requestId
 
 proc newFind(c: Collection): Find =
     ## Private constructor for the Find object. Find acts by taking
@@ -186,11 +185,12 @@ proc `$`*(c: Collection): string =
 
 proc insert*(c: Collection, document: Bson): bool {.discardable.} =
     ## Insert new document into MongoDB
-    let
-        sdoc = document.bytes()
-        msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
+    {.locks: [c.client.requestLock].}:
+        let
+            sdoc = document.bytes()
+            msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
 
-    return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
+        return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
 proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
     ## Insert several new documents into MongoDB using one request
@@ -200,26 +200,28 @@ proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false)
     let sdocs: seq[string] = mapIt(documents, string, bytes(it))
     for sdoc in sdocs: inc(total, sdoc.len())
 
-    let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
-
-    return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
+    {.locks: [c.client.requestLock].}:
+        let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
+        return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
 
 proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
     ## Delete documents from MongoDB
-    let
-        sdoc = selector.bytes()
-        msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
+    {.locks: [c.client.requestLock].}:
+        let
+            sdoc = selector.bytes()
+            msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
 
-    return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
+        return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
 
 proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} =
     ## Update MongoDB document[s]
-    let
-        ssel = selector.bytes()
-        supd = update.bytes()
-        msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
+    {.locks: [c.client.requestLock].}:
+        let
+            ssel = selector.bytes()
+            supd = update.bytes()
+            msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
 
-    return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
+        return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
 proc find*(c: Collection, query: Bson, fields: seq[string] = @[]): Find =
     ## Create lazy query object to MongoDB that can be actually run
@@ -273,43 +275,44 @@ proc limit*(f: Find, numLimit: int): Find {.discardable.} =
 
 iterator performFind(f: Find, numberToReturn: int32): Bson {.closure.} =
     ## Private procedure for performing actual query to Mongo
-    var bfields: Bson = initBsonDocument()
-    if f.fields.len() > 0:
-        for field in f.fields.items():
-            bfields = bfields(field, 1'i32)
-    let
-        squery = f.query.bytes()
-        sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
-        msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
+    {.locks: [f.collection.client.requestLock].}:
+        var bfields: Bson = initBsonDocument()
+        if f.fields.len() > 0:
+            for field in f.fields.items():
+                bfields = bfields(field, 1'i32)
+        let
+            squery = f.query.bytes()
+            sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
+            msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
 
-    let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
+        let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
 
-    if f.collection.client.sock.trySend(dataToSend):
-        var data: string = newStringOfCap(4)
-        var received: int = f.collection.client.sock.recv(data, 4)
-        var stream: Stream = newStringStream(data)
+        if f.collection.client.sock.trySend(dataToSend):
+            var data: string = newStringOfCap(4)
+            var received: int = f.collection.client.sock.recv(data, 4)
+            var stream: Stream = newStringStream(data)
 
-        ## Read data
-        let messageLength: int32 = stream.readInt32()
+            ## Read data
+            let messageLength: int32 = stream.readInt32()
 
-        data = newStringOfCap(messageLength - 4)
-        received = f.collection.client.sock.recv(data, messageLength - 4)
-        stream = newStringStream(data)
+            data = newStringOfCap(messageLength - 4)
+            received = f.collection.client.sock.recv(data, messageLength - 4)
+            stream = newStringStream(data)
 
-        let requestID: int32 = stream.readInt32()
-        let responseTo: int32 = stream.readInt32()
-        let opCode: OperationKind = stream.readInt32().OperationKind
-        let responseFlags: int32 = stream.readInt32()
-        let cursorID: int64 = stream.readInt64()
-        let startingFrom: int32 = stream.readInt32()
-        let numberReturned: int32 = stream.readInt32()
+            let requestID: int32 = stream.readInt32()
+            let responseTo: int32 = stream.readInt32()
+            let opCode: OperationKind = stream.readInt32().OperationKind
+            let responseFlags: int32 = stream.readInt32()
+            let cursorID: int64 = stream.readInt64()
+            let startingFrom: int32 = stream.readInt32()
+            let numberReturned: int32 = stream.readInt32()
 
-        if numberReturned > 0:
-            for i in 0..<numberReturned:
-                let docSize = stream.readInt32()
-                stream.setPosition(stream.getPosition() - 4)
-                let sdoc: string = stream.readStr(docSize)
-                yield initBsonDocument(sdoc)
+            if numberReturned > 0:
+                for i in 0..<numberReturned:
+                    let docSize = stream.readInt32()
+                    stream.setPosition(stream.getPosition() - 4)
+                    let sdoc: string = stream.readStr(docSize)
+                    yield initBsonDocument(sdoc)
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
