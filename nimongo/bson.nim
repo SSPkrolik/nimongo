@@ -1,6 +1,7 @@
 import oids
 import sequtils
 import tables
+import times
 import streams
 import sequtils
 import strutils
@@ -8,12 +9,12 @@ import strutils
 # ------------- type: BsonKind -------------------#
 
 type BsonKind* = enum
-    BsonKindGeneric         = 0x00.char
+    BsonKindUnknown         = 0x00.char  ##
     BsonKindDouble          = 0x01.char  ## 64-bit floating-point
     BsonKindStringUTF8      = 0x02.char  ## UTF-8 encoded C string
     BsonKindDocument        = 0x03.char  ## Embedded document
     BsonKindArray           = 0x04.char  ## Embedded array of Bson values
-    BsonKindBinary          = 0x05.char
+    BsonKindBinary          = 0x05.char  ## Generic binary data
     BsonKindUndefined       = 0x06.char
     BsonKindOid             = 0x07.char  ## Mongo Object ID
     BsonKindBool            = 0x08.char  ## boolean value
@@ -30,9 +31,22 @@ type BsonKind* = enum
     BsonKindMaximumKey      = 0x7F.char
     BsonKindMinimumKey      = 0xFF.char
 
+type BsonSubtype* = enum
+    BsonSubtypeGeneric      = 0x00.char  ##
+    BsonSubtypeFunction     = 0x01.char  ##
+    BsonSubtypeBinaryOld    = 0x02.char  ##
+    BsonSubtypeUUIDOld      = 0x03.char  ##
+    BsonSubtypeUUID         = 0x04.char  ##
+    BsonSubtypeMD5          = 0x05.char  ##
+    BsonSubtypeUserDefined  = 0x80.char  ##
+
 converter toChar*(bk: BsonKind): char =
     ## Convert BsonKind to char
     return bk.char
+
+converter toChar*(sub: BsonSubtype): char =
+    ## Convert BsonSubtype to char
+    return sub.char
 
 converter toBsonKind*(c: char): BsonKind =
     ## Convert char to BsonKind
@@ -43,17 +57,18 @@ converter toBsonKind*(c: char): BsonKind =
 type
     Bson* = object of RootObj  ## Bson Node
         key: string
-        case kind: BsonKind
-        of BsonKindGeneric:         discard
+        case kind*: BsonKind
         of BsonKindDouble:          valueFloat64:   float64
         of BsonKindStringUTF8:      valueString:    string
         of BsonKindDocument:        valueDocument:  seq[Bson]
         of BsonKindArray:           valueArray:     seq[Bson]
-        of BsonKindBinary:          valueBinary:    string
+        of BsonKindBinary:
+                                    valueBinary:    string
+                                    subtype:        BsonSubtype
         of BsonKindUndefined:       discard
         of BsonKindOid:             valueOid:       Oid
         of BsonKindBool:            valueBool:      bool
-        of BsonKindTimeUTC:         valueDateTime:  int64
+        of BsonKindTimeUTC:         valueTime:      Time
         of BsonKindNull:            discard
         of BsonKindRegexp:
                                     expr1:          string
@@ -78,6 +93,10 @@ converter toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
     return Bson(key: "", kind: BsonKindDouble, valueFloat64: x)
 
+converter toFloat64*(x: Bson): float64 =
+    ## Convert Bson object to float64
+    return x.valueFloat64
+
 converter toString*(x: Bson): string =
     ## Convert Bson to UTF8 string
     return x.valueString
@@ -98,13 +117,25 @@ converter toBson*(x: int): Bson =
     ## Convert int to Bson object
     return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
 
+converter toInt64*(x: Bson): int64 =
+    ## Convert Bson object to int
+    return x.valueInt64
+
 converter toBson*(x: bool): Bson =
     ## Convert bool to Bson object
     return Bson(key: "", kind: BsonKindBool, valueBool: x)
 
+converter toBool*(x: Bson): bool =
+    ## Convert Bson object to bool
+    return x.valueBool
+
 converter toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
     return Bson(key: "", kind: BsonKindOid, valueOid: x)
+
+converter toBson*(x: Time): Bson =
+    ## Convert Time to Bson object
+    return Bson(key: "", kind: BsonKindTimeUTC, valueTime: x)
 
 proc int32ToBytes*(x: int32): string =
     ## Convert int32 data piece into series of bytes
@@ -156,6 +187,8 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & oidToBytes(bs.valueOid)
     of BsonKindBool:
         return bs.kind & bs.key & char(0) & boolToBytes(bs.valueBool)
+    of BsonKindTimeUTC:
+        return bs.kind & bs.key & char(0) & int64ToBytes(int64(bs.valueTime.toSeconds() * 1000))
     of BsonKindNull:
         return bs.kind & bs.key & char(0)
     of BsonKindInt32:
@@ -163,6 +196,7 @@ proc bytes*(bs: Bson): string =
     of BsonKindInt64:
         return bs.kind & bs.key & char(0) & int64ToBytes(bs.valueInt64)
     else:
+        echo "BYTES: ", bs.kind
         raise new(Exception)
 
 proc `$`*(bs: Bson): string =
@@ -176,16 +210,6 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
         of BsonKindOid:
             return "\"$#\": ObjectId(\"$#\")" % [bs.key, $bs.valueOid]
-        of BsonKindArray:
-            var res: string = ""
-            res = res & "\"" & bs.key & "\": ["
-            ident = ident & "  "
-            for i, item in bs.valueArray:
-                if i == len(bs.valueArray) - 1: res = res & stringify(item)
-                else: res = res & stringify(item) & ", "
-            ident = ident[0..len(ident) - 3]
-            res = res & "]"
-            return res
         of BsonKindDocument:
             var res: string = ""
             if bs.key != "":
@@ -198,8 +222,25 @@ proc `$`*(bs: Bson): string =
             ident = ident[0..len(ident) - 3]
             res = res & ident & "}"
             return res
+        of BsonKindArray:
+            var res: string = ""
+            res = res & "\"" & bs.key & "\": ["
+            ident = ident & "  "
+            for i, item in bs.valueArray:
+                if i == len(bs.valueArray) - 1: res = res & stringify(item)
+                else: res = res & stringify(item) & ", "
+            ident = ident[0..len(ident) - 3]
+            res = res & "]"
+            return res
+        of BsonKindBinary:
+            var res: string = "\"$#\" ($#): [" % [bs.key, $bs.subtype]
+            for i in bs.valueBinary:
+                res = res & $ord(i)
+            return res & "]"
         of BsonKindBool:
             return "\"$#\": $#" % [bs.key, if bs.valueBool == true: "true" else: "false"]
+        of BsonKindTimeUTC:
+            return "\"$#\": $#" % [bs.key, $bs.valueTime]
         of BsonKindNull:
             return "\"$#\": null" % [bs.key]
         of BsonKindInt32:
@@ -207,6 +248,7 @@ proc `$`*(bs: Bson): string =
         of BSonKindInt64:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
         else:
+            echo bs.kind
             raise new(Exception)
     return stringify(bs)
 
@@ -316,6 +358,9 @@ proc initBsonDocument*(bytes: string): Bson =
             return doc(name.string, valueOid)
         of BsonKindBool:
             return doc(name.string, if s.readChar() == 0.char: false else: true)
+        of BsonKindTimeUTC:
+            let timeUTC: Bson = Bson(key: name, kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
+            return doc(name.string, timeUTC)
         of BsonKindNull:
             return doc(name.string, null())
         of BsonKindInt32:

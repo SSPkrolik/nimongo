@@ -73,9 +73,11 @@ type
         fields:     seq[string]
         queryFlags: int32
 
+    NotFound* = object of Exception  ## Raises when querying of one documents returns empty result
+
 # === Private APIs === #
 
-proc nextRequestId(m: Mongo): int32 =
+proc nextRequestId(m: MongoBase): int32 =
     ## Return next request id for current MongoDB client
     m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
     return m.requestId
@@ -167,7 +169,7 @@ proc `[]`*(m: Mongo, dbName: string): Database =
     result.name = dbName
     result.client = m
 
-proc `$`*(m: Mongo): string =
+proc `$`*(m: MongoBase): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
 
@@ -320,6 +322,10 @@ iterator performFind(f: Find, numberToReturn: int32): Bson {.closure.} =
                     stream.setPosition(stream.getPosition() - 4)
                     let sdoc: string = stream.readStr(docSize)
                     yield initBsonDocument(sdoc)
+            elif numberToReturn == 1:
+                raise newException(NotFound, "No documents matching query were found")
+            else:
+                discard
 
 proc all*(f: Find): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
@@ -337,13 +343,38 @@ iterator items*(f: Find): Bson =
     for doc in f.performFind(0):
         yield doc
 
+proc isMaster*(m: Mongo): bool =
+    ## Perform query in order to check if connected Mongo instance is a master
+    return m["admin"]["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
+
+proc count*(c: Collection): int64 =
+    ## Return number of documents in collection
+    let x: float64 = c.db["$cmd"].find(B("count", c.name)).one()["n"]
+    return x.int64
+
+proc count*(f: Find): int64 =
+    ## Return number of documents in find query result
+    let x: float64 = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
+    return x.int64
+
 when isMainModule:
     let m: Mongo = newMongo()
     discard m.connect()
 
-    let collection = m["db"]["collection"]
-    echo "Collection: ", collection
-    let res: Find = collection.find(B("integer", 200)).exhaust()
+    echo "Is master: ", m.isMaster()
 
-    for doc in res.items():
-        stdout.write($doc, "\n")
+    let collection = m["db"]["$cmd"]
+    #echo "Collection: ", collection
+    #let res: Find = collection.find(B("integer", 200)).exhaust()
+
+    #for doc in res.items():
+    #    stdout.write(".")
+    #echo ""
+
+    let c = m["db"]["collection"].count()
+    echo "db.collection contins $# documents." % [$c]
+
+    let c2 = m["db"]["collection"].find(B("string", "hello")).count()
+    echo "There are $# docs matching query." % [$c2]
+    #let list = collection.find(B("count", "collection")).one()
+    #echo list
