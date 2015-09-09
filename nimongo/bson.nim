@@ -1,6 +1,5 @@
 import oids
 import sequtils
-import tables
 import times
 import streams
 import sequtils
