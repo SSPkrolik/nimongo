@@ -112,6 +112,10 @@ converter toBson*(x: int32): Bson =
     ## Convert int32 to Bson object
     return Bson(key: "", kind: BsonKindInt32, valueInt32: x)
 
+converter toInt32*(x: Bson): int32 =
+    ## Convert Bson to int32
+    return x.valueInt32
+
 converter toBson*(x: int): Bson =
     ## Convert int to Bson object
     return Bson(key: "", kind: BsonKindInt64, valueInt64: x)

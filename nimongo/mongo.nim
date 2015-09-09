@@ -347,15 +347,21 @@ proc isMaster*(m: Mongo): bool =
     ## Perform query in order to check if connected Mongo instance is a master
     return m["admin"]["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
 
-proc count*(c: Collection): int64 =
+proc count*(c: Collection): int =
     ## Return number of documents in collection
-    let x: float64 = c.db["$cmd"].find(B("count", c.name)).one()["n"]
-    return x.int64
+    let x = c.db["$cmd"].find(B("count", c.name)).one()["n"]
+    if x.kind == BsonKindInt32:
+        return x.toInt32()
+    elif x.kind == BsonKindDouble:
+        return x.toFloat64.int
 
-proc count*(f: Find): int64 =
+proc count*(f: Find): int =
     ## Return number of documents in find query result
-    let x: float64 = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
-    return x.int64
+    let x = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
+    if x.kind == BsonKindInt32:
+        return x.toInt32()
+    elif x.kind == BsonKindDouble:
+        return x.toFloat64().int
 
 when isMainModule:
     let m: Mongo = newMongo()
