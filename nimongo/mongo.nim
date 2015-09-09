@@ -113,13 +113,29 @@ proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: i
 
 # === Mongo client API === #
 
+proc newMongoBase(host: string = "127.0.0.1", port: uint16 = 27017): MongoBase =
+    ## MongoBase constructor
+    result.new
+    result.host = host
+    result.port = port
+    result.requestID = 0
+    result.queryFlags = 0
+
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     ## Mongo client constructor
     result.new
     result.host = host
     result.port = port
     result.requestID = 0
+    result.queryFlags = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
+
+proc newAsyncMongo(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
+    ## Mongo asynchrnonous client constructor
+    result.new
+    result.host = host
+    result.port = port
+    result.requestID = 0
     result.queryFlags = 0
 
 proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
