@@ -1,3 +1,4 @@
+import asyncdispatch
 import oids
 import unittest
 
@@ -70,3 +71,15 @@ suite "Mongo client test suite":
         let request = c.find(B("string", "hello"))
         for document in request.items():
             check(document["string"] == "hello")
+
+
+suite "Mongo async client test suite":
+
+    setup:
+        var
+            a: AsyncMongo = newAsyncMongo()
+
+        require(waitFor(a.connect()) == true)
+
+    test "AsyncMono `$` operator":
+        check(true)

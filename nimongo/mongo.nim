@@ -123,7 +123,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.queryFlags = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
-proc newAsyncMongo(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
+proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
     ## Mongo asynchrnonous client constructor
     result.new
     result.host = host
