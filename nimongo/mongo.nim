@@ -2,6 +2,7 @@
 when hostOs == "linux":
     {.passL: "-pthread".}
 
+import asyncdispatch
 import asyncnet
 import locks
 import oids
@@ -113,14 +114,6 @@ proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: i
 
 # === Mongo client API === #
 
-proc newMongoBase(host: string = "127.0.0.1", port: uint16 = 27017): MongoBase =
-    ## MongoBase constructor
-    result.new
-    result.host = host
-    result.port = port
-    result.requestID = 0
-    result.queryFlags = 0
-
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     ## Mongo client constructor
     result.new
@@ -137,6 +130,7 @@ proc newAsyncMongo(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
+    result.sock = newAsyncSocket()
 
 proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
@@ -174,7 +168,14 @@ proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
 proc connect*(m: Mongo): bool =
     ## Connect socket to mongo server
     try:
-        m.sock.connect(m.host, Port(m.port), -1)
+        m.sock.connect(m.host, sockets.Port(m.port), -1)
+    except OSError:
+        return false
+    return true
+
+proc connect*(am: AsyncMongo): Future[bool] {.async.} =
+    try:
+        await am.sock.connect(am.host, asyncdispatch.Port(am.port))
     except OSError:
         return false
     return true
@@ -400,3 +401,10 @@ when isMainModule:
     echo "There are $# docs matching query." % [$c2]
     #let list = collection.find(B("count", "collection")).one()
     #echo list
+
+    proc testasync(): Future[void] {.async.} =
+        let am: AsyncMongo = newAsyncMongo()
+        let connected = await am.connect()
+        echo "Async connect result: ", connected
+
+    waitFor(testasync())
