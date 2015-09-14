@@ -17,68 +17,71 @@ import json
 import bson
 
 type OperationKind = enum      ## Type of operation performed by MongoDB
-    OP_REPLY        =    1'i32 ##
-    # OP_MSG        = 1000'i32 ## Deprecated.
-    OP_UPDATE       = 2001'i32 ##
-    OP_INSERT       = 2002'i32 ## Insert new document into MongoDB
-    # RESERVED      = 2003'i32 ## Reserved by MongoDB developers
-    OP_QUERY        = 2004'i32 ##
-    OP_GET_MORE     = 2005'i32 ##
-    OP_DELETE       = 2006'i32 ## Remove documents from MongoDB
-    OP_KILL_CURSORS = 2007'i32 ##
+  OP_REPLY        =    1'i32 ##
+  # OP_MSG        = 1000'i32 ## Deprecated.
+  OP_UPDATE       = 2001'i32 ##
+  OP_INSERT       = 2002'i32 ## Insert new document into MongoDB
+  # RESERVED      = 2003'i32 ## Reserved by MongoDB developers
+  OP_QUERY        = 2004'i32 ##
+  OP_GET_MORE     = 2005'i32 ##
+  OP_DELETE       = 2006'i32 ## Remove documents from MongoDB
+  OP_KILL_CURSORS = 2007'i32 ##
+
+type ClientKind* = enum
+  ClientKindSync  = 0
+  ClientKindAsync = 1
 
 const
-    TailableCursor  = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
-    SlaveOk         = 1'i32 shl 2 ## Allow to query replica set slaves
-    NoCursorTimeout = 1'i32 shl 4 ##
-    AwaitData       = 1'i32 shl 5 ##
-    Exhaust         = 1'i32 shl 6 ##
-    Partial         = 1'i32 shl 7 ## Get info only from running shards
+  TailableCursor  = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
+  SlaveOk         = 1'i32 shl 2 ## Allow to query replica set slaves
+  NoCursorTimeout = 1'i32 shl 4 ##
+  AwaitData       = 1'i32 shl 5 ##
+  Exhaust         = 1'i32 shl 6 ##
+  Partial         = 1'i32 shl 7 ## Get info only from running shards
 
 const
-    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
-    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
-    # ShardConfigState = 1'i32 shl 2 ## (used by mongos)
-    AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
+  CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
+  QueryFailure       = 1'i32 shl 1 ## $err field document is returned
+  # ShardConfigState = 1'i32 shl 2 ## (used by mongos)
+  AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
 
 converter toInt32*(ok: OperationKind): int32 =
-    ## Convert OperationKind ot int32
-    return ok.int32
+  ## Convert OperationKind ot int32
+  return ok.int32
 
 type
-    MongoBase = ref object of RootObj       ## Base Mongo client object
-        requestId:   int32
-        host:        string
-        port:        uint16
-        queryFlags:  int32
+  Mongo* = ref object of RootObj       ## Mongo client object
+    requestId:   int32
+    requestLock: Lock
+    host:        string
+    port:        uint16
+    queryFlags:  int32
+    case kind:   ClientKind
+    of ClientKindSync:
+      sock:      Socket
+    of ClientKindAsync:
+      asock:     AsyncSocket
 
-    Mongo* = ref object of MongoBase        ## Synchrounous MongoDB client
-        requestLock: Lock
-        sock:        Socket
+  Database* = ref object ## MongoDB database object
+    name:   string
+    client: Mongo
 
-    AsyncMongo* = ref object of MongoBase   ## Asynchronous MongoDB client
-        sock:        AsyncSocket
+  Collection* = ref object ## MongoDB collection object
+    name:   string
+    db:     Database
+    client: Mongo
 
-    Database* = ref object ## MongoDB database object
-        name:   string
-        client: Mongo
+  Find* = ref object ## MongoDB configurable query object (lazy find)
+    collection: Collection
+    query:      Bson
+    fields:     seq[string]
+    queryFlags: int32
 
-    Collection* = ref object ## MongoDB collection object
-        name:   string
-        db:     Database
-        client: Mongo
-
-    Find* = ref object ## MongoDB configurable query object (lazy find)
-        collection: Collection
-        query:      Bson
-        fields:     seq[string]
-        queryFlags: int32
-
-    NotFound* = object of Exception  ## Raises when querying of one documents returns empty result
+  NotFound* = object of Exception  ## Raises when querying of one documents returns empty result
 
 # === Private APIs === #
 
-proc nextRequestId(m: MongoBase): int32 =
+proc nextRequestId(m: Mongo): int32 =
     ## Return next request id for current MongoDB client
     m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
     return m.requestId
@@ -121,16 +124,18 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
+    result.kind = ClientKindSync
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
-proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
+proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     ## Mongo asynchrnonous client constructor
     result.new
     result.host = host
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
-    result.sock = newAsyncSocket()
+    result.kind = ClientKindAsync
+    result.asock = newAsyncSocket()
 
 proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
@@ -173,9 +178,9 @@ proc connect*(m: Mongo): bool =
         return false
     return true
 
-proc connect*(am: AsyncMongo): Future[bool] {.async.} =
+proc asyncConnect*(m: Mongo): Future[bool] {.async.} =
     try:
-        await am.sock.connect(am.host, asyncdispatch.Port(am.port))
+        await m.asock.connect(m.host, asyncdispatch.Port(m.port))
     except OSError:
         return false
     return true
@@ -186,7 +191,7 @@ proc `[]`*(m: Mongo, dbName: string): Database =
     result.name = dbName
     result.client = m
 
-proc `$`*(m: MongoBase): string =
+proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
 
@@ -381,7 +386,7 @@ proc count*(f: Find): int =
         return x.toFloat64().int
 
 when isMainModule:
-    let m: Mongo = newMongo()
+    let m: Mongo = newMongo().slaveOk().allowPartial()
     discard m.connect()
 
     echo "Is master: ", m.isMaster()
@@ -403,8 +408,8 @@ when isMainModule:
     #echo list
 
     proc testasync(): Future[void] {.async.} =
-        let am: AsyncMongo = newAsyncMongo()
-        let connected = await am.connect()
+        let am: Mongo = newAsyncMongo()
+        let connected = await am.asyncConnect()
         echo "Async connect result: ", connected
 
     waitFor(testasync())
