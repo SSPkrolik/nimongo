@@ -22,13 +22,13 @@ type BsonKind* = enum
     BsonKindRegexp          = 0x0B.char
     BsonKindDBPointer       = 0x0C.char
     BsonKindJSCode          = 0x0D.char
-    BsonKindDeprecated      = 0x0E.char
+    BsonKindDeprecated      = 0x0E.char  ## DEPRECATED
     BsonKindJSCodeWithScope = 0x0F.char
     BsonKindInt32           = 0x10.char  ## 32-bit integer number
-    BsonKindTimestamp       = 0x11.char  ## 64-bit timestamp
+    BsonKindTimestamp       = 0x11.char  ##
     BsonKindInt64           = 0x12.char  ## 64-bit integer number
-    BsonKindMaximumKey      = 0x7F.char
-    BsonKindMinimumKey      = 0xFF.char
+    BsonKindMaximumKey      = 0x7F.char  ## Maximum MongoDB comparable value
+    BsonKindMinimumKey      = 0xFF.char  ## Minimum MongoDB comparable value
 
 type BsonSubtype* = enum
     BsonSubtypeGeneric      = 0x00.char  ##
@@ -201,6 +201,10 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
     of BsonKindInt64:
         return bs.kind & bs.key & char(0) & int64ToBytes(bs.valueInt64)
+    of BsonKindMinimumKey:
+        return bs.kind & bs.key & char(0)
+    of BsonKindMaximumKey:
+        return bs.kind & bs.key & char(0)
     else:
         echo "BYTES: ", bs.kind
         raise new(Exception)
@@ -215,7 +219,7 @@ proc `$`*(bs: Bson): string =
         of BsonKindStringUTF8:
             return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
         of BsonKindOid:
-            return "\"$#\": ObjectId(\"$#\")" % [bs.key, $bs.valueOid]
+            return "\"$#\": {\"$$oid\": \"$#\"}" % [bs.key, $bs.valueOid]
         of BsonKindDocument:
             var res: string = ""
             if bs.key != "":
@@ -253,6 +257,10 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
         of BSonKindInt64:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
+        of BsonKindMinimumKey:
+            return "\"$#\": {\"$$minkey\": 1}" % [bs.key]
+        of BsonKindMaximumKey:
+            return "\"$#\": {\"$$maxkey\": 1}" % [bs.key]
         else:
             echo bs.kind
             raise new(Exception)
@@ -286,6 +294,14 @@ template B*[T](key: string, values: seq[T]): expr =
 proc null*(): Bson =
     ## Create new Bson 'null' value
     return Bson(key: "", kind: BsonKindNull)
+
+proc minkey*(): Bson =
+  ## Create new Bson value representing 'Min key' bson type
+  return Bson(key: "", kind: BsonKindMinimumKey)
+
+proc maxkey*(): Bson =
+  ## Create new Bson value representing 'Max key' bson type
+  return Bson(key: "", kind: BsonKindMaximumKey)
 
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
     ## Add field to bson object
@@ -373,6 +389,10 @@ proc initBsonDocument*(bytes: string): Bson =
             return doc(name.string, s.readInt32())
         of BsonKindInt64:
             return doc(name.string, s.readInt64())
+        of BsonKindMinimumKey:
+            return doc(name.string, minkey())
+        of BsonKindMaximumKey:
+            return doc(name.string, maxkey())
         else:
             raise new(Exception)
 
@@ -392,6 +412,8 @@ when isMainModule:
         "someTrue", true)(
         "surname", "Smith")(
         "someNull", null())(
+        "minkey", minkey())(
+        "maxkey", maxkey())(
         "subdoc", initBsonDocument()(
             "salary", 500
         )(

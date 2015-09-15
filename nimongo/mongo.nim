@@ -433,5 +433,5 @@ when isMainModule:
     echo("Connecting async: ", waitFor(a.asyncConnect()))
 
     let someid = genOid()
-    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid))))
+    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("minkey", minkey()))))
     echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))
