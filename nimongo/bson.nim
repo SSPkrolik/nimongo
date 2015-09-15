@@ -205,6 +205,8 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & bs.regex & char(0) & bs.options & char(0)
     of BsonKindDBPointer:
         return bs.kind & bs.key & char(0) & int32ToBytes(int32(len(bs.refCol)) + 1) & bs.refCol & char(0) & oidToBytes(bs.refOid)
+    of BsonKindJSCode:
+        return bs.kind & bs.key & char(0) & int32ToBytes(int32(len(bs.valueCode)) + 1) & bs.valueCode & char(0)
     of BsonKindInt32:
         return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
     of BsonKindInt64:
@@ -270,6 +272,8 @@ proc `$`*(bs: Bson): string =
               refcol = bs.refCol.split(".")[1]
               refdb  = bs.refCol.split(".")[0]
             return "\"$#\": {\"$$ref\": \"$#\", \"$$id\": \"$#\", \"$$db\": \"$#\"}" % [bs.key, refcol, $bs.refOid, refdb]
+        of BsonKindJSCode:
+            return "\"$#\": $#" % [bs.key, bs.valueCode] ## TODO: make valid JSON here
         of BsonKindInt32:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
         of BSonKindInt64:
@@ -331,6 +335,10 @@ proc maxkey*(): Bson =
 proc regex*(pattern: string, options: string): Bson =
   ## Create new Bson value representing Regexp bson type
   return Bson(key: "", kind: BsonKindRegexp, regex: pattern, options: options)
+
+proc js*(code: string): Bson =
+  ## Create new Bson value representing JavaScript code bson type
+  return Bson(key: "", kind: BsonKindJSCode, valueCode: code)
 
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
@@ -429,6 +437,11 @@ proc initBsonDocument*(bytes: string): Bson =
               refoid: Oid = cast[Oid](s.readStr(12).cstring)
             discard s.readChar()
             return doc(name.string, dbref(refcol, refoid))
+        of BsonKindJSCode:
+            let
+              code: string = s.readStr(s.readInt32() - 1)
+            discard s.readChar()
+            return doc(name.string, js(code))
         of BsonKindInt32:
             return doc(name.string, s.readInt32())
         of BsonKindInt64:
@@ -460,6 +473,7 @@ when isMainModule:
         "maxkey", maxkey())(
         "regexp-field", regex("pattern", "ismx"))(
         "undefined", undefined())(
+        "someJS", js("function identity(x) {return x;}"))(
         "someRef", dbref("db.col", genOid()))(
         "subdoc", initBsonDocument()(
             "salary", 500

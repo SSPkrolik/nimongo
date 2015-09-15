@@ -137,7 +137,7 @@ within `nimongo.bson` Nim module.
 |            | Null            | :white_check_mark: |
 |            | RegExp          | :white_check_mark: |
 |            | DBRef           | :white_check_mark: |
-|            | JavaScript code | :red_circle:       |
+|            | JavaScript code | :white_check_mark: |
 |            | JavaScript code w/ scope|:red_circle:|
 |            | Int32           | :white_check_mark: |
 |            | Timestamp (inner)|:red_circle:       |
