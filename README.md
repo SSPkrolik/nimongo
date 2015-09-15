@@ -9,16 +9,33 @@ Currently Supported Features
 Here's a list of supported features with appropriate status icons:
 
  * :white_check_mark: - implemented feature
- * :no_entry: - __not__ implemented feature
+ * :red_circle: - __not__ implemented feature
+ * :warning: - __partly__ supported or __unstable__
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
-| Operations | Insert          | :white_check_mark: | :white_check_mark: |
+| BSON       |                 |                    |                    |
+|            | Serialization   | :warning:          | :warning:          |
+|            | Deserialization | :warning:          | :warning:          |
+| Operations |                 |                    |                    |
+|            | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
 |            | Remove          | :white_check_mark: | :white_check_mark: |
-|            | Remove multiple | :no_entry:         | :no_entry:         |
-|            | Update          | :white_check_mark: | :white_check_mark: |
-|            | Update multiple | :no_entry:         | :no_entry:         |
+|            | Remove multiple | :red_circle:       | :red_circle:       |
+|            | Update          | :white_check_mark: | :red_circle:       |
+|            | Update multiple | :red_circle:       | :red_circle:       |
+|            | Upsert          | :red_circle:       | :red_circle:       |
+| Querying   |                 |                    |                    |
+|            | Find one        | :white_check_mark: | :red_circle:       |
+|            | Find            | :warning:          | :red_circle:       |
+|            | Skip            | :warning:          | :red_circle:       |
+|            | Limit           | :warning:          | :red_circle:       |
+|            | Tailable        | :warning:          | :red_circle:       |
+|            | Partial         | :warning:          | :red_circle:       |
+| Commands   |                 |                    |                    |
+|            | isMaster        | :white_check_mark: | :red_circle:       |
+| Replica    |                 | :red_circle:       | :red_circle:       |
+| GridFS     |                 | :red_circle:       | :red_circle:       |
 
 Installation
 ------------
