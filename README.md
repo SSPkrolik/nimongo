@@ -4,6 +4,15 @@ nimongo - Pure Nim MongoDB Driver
 `nimongo` has a main intention to provide developer-friendly way to interact
 with MongoDB using Nim programming language without any other dependencies.
 
+Currently Supported Features
+----------------------------
+
+| Block      | Feature         | Status (sync)     | Status (async)    |
+|-----------:|:----------------|:-----------------:|:-----------------:|
+| Operations | Insert          | :white_check_mark | :white_check_mark |
+|            | Multiple Insert | :white_check_mark | :white_check_mark |
+
+
 Installation
 ------------
 You can use `nimble` package manager to install `nimongo`. The most recent
