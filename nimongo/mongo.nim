@@ -223,6 +223,15 @@ proc insert*(c: Collection, document: Bson): bool {.discardable.} =
 
         return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
+proc asyncInsert*(c: Collection, document: Bson): Future[void] {.async.} =
+  ## Insert new document into MongoDB via async connection
+  {.locks: [c.client.requestLock].}:
+    let
+      sdoc = document.bytes()
+      msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
+
+    await c.client.asock.send(msgHeader & buildMessageInsert(0, $c) & sdoc)
+
 proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
     ## Insert several new documents into MongoDB using one request
     assert len(documents) > 0
@@ -410,3 +419,5 @@ when isMainModule:
     let am = newAsyncMongo()
     let connected = waitFor(am.asyncConnect())
     echo "Async connect result: ", connected
+    waitFor(am["db"]["async"].asyncInsert(B("async", "document")))
+    echo "Inserted"

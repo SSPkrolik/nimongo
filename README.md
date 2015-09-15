@@ -77,4 +77,7 @@ let connected = waitFor(m.asyncConnect())
 
 ## Testing connection establishing result
 echo "Async connection established: ", connected
+
+## Inserting single document into MongoDB
+waitFor(m.asyncInsert(B("hello-async", "victory")))
 ```
