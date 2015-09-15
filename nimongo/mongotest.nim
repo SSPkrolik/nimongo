@@ -92,3 +92,7 @@ suite "Mongo async client test suite":
       d2 = B("doc2", "string")
       insertResult = waitFor(c.asyncInsert(@[d1, d2]))
     check(insertResult == true)
+
+  test "[async] Remove single document":
+    let removeResult = waitFor(c.asyncRemove(B("doc1", "string")))
+    check(removeResult == true)
