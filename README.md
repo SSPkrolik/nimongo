@@ -131,7 +131,7 @@ within `nimongo.bson` Nim module.
 |            | String          | :white_check_mark: |
 |            | Array           | :white_check_mark: |
 |            | Mongo ObjectId  | :white_check_mark: |
-|            | Undefined       | :red_circle:       |
+|            | Undefined       | :white_check_mark: |
 |            | Boolean         | :white_check_mark: |
 |            | UTC datetime    | :white_check_mark: |
 |            | Null            | :white_check_mark: |
