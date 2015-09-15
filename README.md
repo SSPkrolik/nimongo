@@ -104,17 +104,43 @@ Here's a list of supported features with appropriate status icons:
 
 BSON
 ----
+This table represents BSON data types and their implementation status
+within `nimongo.bson` Nim module.
 
-| Block      | Feature         | Status (sync)      | Status (async)     |
-|-----------:|:----------------|:------------------:|:------------------:|
-|            | double          | :white_check_mark:                      |
-|            | string          | :white_check_mark:                      |
-|            | subdocument     | :white_check_mark:                      |
-|            | string          | :white_check_mark:                      |
-|            | array           | :white_check_mark:                      |
+| Block      | Data Type       | Status             |
+|-----------:|:----------------|:------------------:|
+| Data Types |                 |                    |
+|            | Double          | :white_check_mark: |
+|            | String          | :white_check_mark: |
+|            | SubSocument     | :white_check_mark: |
+|            | String          | :white_check_mark: |
+|            | Array           | :white_check_mark: |
+|            | Mongo ObjectId  | :white_check_mark: |
+|            | Undefined       | :red_circle:       |
+|            | Boolean         | :white_check_mark: |
+|            | UTC datetime    | :white_check_mark: |
+|            | Null            | :white_check_mark: |
+|            | RegExp          | :red_circle:       |
+|            | DatabasePointer | :red_circle:       |
+|            | JavaScript code | :red_circle:       |
+|            | JavaScript code w/ scope|:red_circle:|
+|            | Int32           | :white_check_mark: |
+|            | Timestamp (inner) :red_circle:       |
+|            | Int64           | :white_check_mark: |
+|            | Minimum Key     | :white_check_mark: |
+|            | Maximum Key     | :white_check_mark: |
+| Binary Subtypes |            |                    |
+|            | Generic         | :red_circle:       |
+|            | Binary (Old)    | :red_circle:       |
+|            | UUID (Old)      | :red_circle:       |
+|            | UUID            | :red_circle:       |
+|            | MD5             | :red_circle:       |
+|            | User-defined    | :red_circle:       |
 
 MongoDB Features
 ----------------
+This table represents MongoDB features and their implementation status within
+`nimongo.mongo` Nim module.
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
@@ -137,3 +163,6 @@ MongoDB Features
 |            | isMaster        | :white_check_mark: | :red_circle:       |
 | Replica    |                 | :red_circle:       | :red_circle:       |
 | GridFS     |                 | :red_circle:       | :red_circle:       |
+
+
+__P.S.__ Contribution is welcomed :)
