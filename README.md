@@ -87,4 +87,7 @@ let
   doc2 = B("doc2", "string")
 
 waitFor(m.asyncInsert(@[doc1, doc2]))
+
+## Removing single document from MongoDB
+waitFor(m.asyncRemove(B("doc1", 15)))
 ```
