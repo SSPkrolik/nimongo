@@ -125,7 +125,7 @@ within `nimongo.bson` Nim module.
 |            | JavaScript code | :red_circle:       |
 |            | JavaScript code w/ scope|:red_circle:|
 |            | Int32           | :white_check_mark: |
-|            | Timestamp (inner) :red_circle:       |
+|            | Timestamp (inner)|:red_circle:       |
 |            | Int64           | :white_check_mark: |
 |            | Minimum Key     | :white_check_mark: |
 |            | Maximum Key     | :white_check_mark: |
