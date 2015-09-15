@@ -16,38 +16,38 @@ suite "Mongo client test suite":
 
         require(m.connect() == true)
 
-    test "Mongo object `$` operator":
+    test "[ sync] Mongo object `$` operator":
         check($m == "mongodb://127.0.0.1:27017")
 
-    test "Taking database":
+    test "[ sync] Taking database":
         check($db == "db")
 
-    test "Taking collection":
+    test "[ sync] Taking collection":
         check($c == "db.collection")
 
-    test "Inserting single document":
+    test "[ sync] Inserting single document":
         check(c.insert(B("double", 3.1415)) == true)
 
-    test "Inserting multiple documents":
+    test "[ sync] Inserting multiple documents":
         let
             doc1 = B("integer", 100'i32)
             doc2 = B("string", "hello")("subdoc", B("name", "John"))
             doc3 = B("array", @["element1", "element2", "element3"])
         check(c.insert(@[doc1, doc2, doc3]) == true)
 
-    test "Update single document":
+    test "[ sync] Update single document":
         let
             selector = B("integer", 100'i32)
             updater  = B("$set", B("integer", 200))
 
         check(c.update(selector, updater) == true)
 
-    test "Remove document":
+    test "[ sync] Remove document":
         let
             doc = B("string", "hello")
         check(c.remove(doc) == true)
 
-    test "Query single document":
+    test "[ sync] Query single document":
         let myId = genOid()
         let doc = B("string", "somedoc")("myid", myId)
 
@@ -57,14 +57,14 @@ suite "Mongo client test suite":
         let myIdFromDb: Oid = res["myid"]
         check(myIdFromDb == myId)
 
-    test "Query multiple documents as a sequence":
+    test "[ sync] Query multiple documents as a sequence":
         let doc = B("string", "hello")
         check(c.insert(doc))
         check(c.insert(doc))
         let docs = c.find(B("string", "hello")).all()
         check(docs.len() > 1)
 
-    test "Query multiple documents as iterator":
+    test "[ sync] Query multiple documents as iterator":
         let doc = B("string", "hello")
         check(c.insert(doc))
         check(c.insert(doc))
@@ -72,14 +72,23 @@ suite "Mongo client test suite":
         for document in request.items():
             check(document["string"] == "hello")
 
-
 suite "Mongo async client test suite":
 
-    setup:
-        var
-            a: AsyncMongo = newAsyncMongo()
+  setup:
+    let
+      a: Mongo = newAsyncMongo()
+      db: Database = a["db"]
+      c: Collection = db["async"]
+      connected = waitFor(a.asyncConnect())
+    require(connected == true)
 
-        require(waitFor(a.connect()) == true)
+  test "[async] Insert single document":
+    let insertResult = waitFor(c.asyncInsert(B("hello", "async")))
+    check(insertResult == true)
 
-    test "AsyncMono `$` operator":
-        check(true)
+  test "[async] Insert multiple documents":
+    let
+      d1 = B("doc1", "string")
+      d2 = B("doc2", "string")
+      insertResult = waitFor(c.asyncInsert(@[d1, d2]))
+    check(insertResult == true)
