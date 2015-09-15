@@ -6,6 +6,11 @@ with MongoDB using Nim programming language without any other dependencies.
 
 Currently Supported Features
 ----------------------------
+Here's a list of supported features with appropriate status icons:
+
+ * :white_check_mark: - implemented feature
+ * :no_entry: - __not__ implemented feature
+
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
