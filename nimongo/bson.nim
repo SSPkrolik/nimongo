@@ -1,9 +1,9 @@
+import algorithm
 import oids
 import sequtils
-import times
 import streams
-import sequtils
 import strutils
+import times
 
 # ------------- type: BsonKind -------------------#
 
@@ -74,8 +74,8 @@ type
     of BsonKindTimeUTC:         valueTime:      Time
     of BsonKindNull:            discard
     of BsonKindRegexp:
-                                expr1:          string
-                                expr2:          string
+                                regex:          string
+                                options:        string
     of BsonKindDBPointer:       discard
     of BsonKindJSCode:          valueCode:      string
     of BsonKindDeprecated:      valueDepr:      string
@@ -199,6 +199,8 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & int64ToBytes(int64(bs.valueTime.toSeconds() * 1000))
     of BsonKindNull:
         return bs.kind & bs.key & char(0)
+    of BsonKindRegexp:
+        return bs.kind & bs.key & char(0) & bs.regex & char(0) & bs.options & char(0)
     of BsonKindInt32:
         return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
     of BsonKindInt64:
@@ -257,6 +259,8 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": $#" % [bs.key, $bs.valueTime]
         of BsonKindNull:
             return "\"$#\": null" % [bs.key]
+        of BsonKindRegexp:
+            return "\"$#\": {\"$$regex\": \"$#\", \"$$options\": \"$#\"}" % [bs.key, bs.regex, bs.options]
         of BsonKindInt32:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
         of BSonKindInt64:
@@ -312,11 +316,17 @@ proc maxkey*(): Bson =
   return Bson(key: "", kind: BsonKindMaximumKey)
 
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
-    ## Add field to bson object
-    result = bs
-    var value: Bson = val
-    value.key = key
-    result.valueDocument.add(value)
+  ## Add field to bson object
+  result = bs
+  var value: Bson = val
+  value.key = key
+  result.valueDocument.add(value)
+
+proc `()`*(bs: Bson, key: string, pattern: string, options: string): Bson {.discardable.} =
+  ## Add RegExp field to bson object
+  result = bs
+  let value: Bson = Bson(key: key, kind: BsonKindRegexp, regex: pattern, options: options)
+  result.valueDocument.add(value)
 
 proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     ## Add array field to bson object
@@ -352,6 +362,11 @@ proc `[]`*(bs: Bson, key: int): Bson =
         return bs.valueArray[key]
     else:
         raise new(Exception)
+
+converter seqCharToString(x: openarray[char]): string =
+  ## Converts sequence of chars to string
+  result = newStringOfCap(len(x))
+  for c in x: result = result & c
 
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte stream
@@ -395,6 +410,8 @@ proc initBsonDocument*(bytes: string): Bson =
             return doc(name.string, timeUTC)
         of BsonKindNull:
             return doc(name.string, null())
+        of BsonKindRegexp:
+            return doc(name.string, s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
         of BsonKindInt32:
             return doc(name.string, s.readInt32())
         of BsonKindInt64:
@@ -424,6 +441,7 @@ when isMainModule:
         "someNull", null())(
         "minkey", minkey())(
         "maxkey", maxkey())(
+        "regexp-field", "pattern", "ismx")(
         "undefined", undefined())(
         "subdoc", initBsonDocument()(
             "salary", 500
