@@ -25,7 +25,7 @@ type BsonKind* = enum
     BsonKindDeprecated      = 0x0E.char
     BsonKindJSCodeWithScope = 0x0F.char
     BsonKindInt32           = 0x10.char  ## 32-bit integer number
-    BsonKindTimestamp       = 0x11.char
+    BsonKindTimestamp       = 0x11.char  ## 64-bit timestamp
     BsonKindInt64           = 0x12.char  ## 64-bit integer number
     BsonKindMaximumKey      = 0x7F.char
     BsonKindMinimumKey      = 0xFF.char
@@ -54,35 +54,38 @@ converter toBsonKind*(c: char): BsonKind =
 # ------------- type: Bson -----------------------#
 
 type
-    Bson* = object of RootObj  ## Bson Node
-        key: string
-        case kind*: BsonKind
-        of BsonKindDouble:          valueFloat64:   float64
-        of BsonKindStringUTF8:      valueString:    string
-        of BsonKindDocument:        valueDocument:  seq[Bson]
-        of BsonKindArray:           valueArray:     seq[Bson]
-        of BsonKindBinary:
-                                    valueBinary:    string
-                                    subtype:        BsonSubtype
-        of BsonKindUndefined:       discard
-        of BsonKindOid:             valueOid:       Oid
-        of BsonKindBool:            valueBool:      bool
-        of BsonKindTimeUTC:         valueTime:      Time
-        of BsonKindNull:            discard
-        of BsonKindRegexp:
-                                    expr1:          string
-                                    expr2:          string
-        of BsonKindDBPointer:       discard
-        of BsonKindJSCode:          valueCode:      string
-        of BsonKindDeprecated:      valueDepr:      string
-        of BsonKindJSCodeWithScope: valueCodeWS:    string
-        of BsonKindInt32:           valueInt32:     int32
-        of BsonKindTimestamp:       valueTimestamp: int64
-        of BsonKindInt64:           valueInt64:     int64
-        of BsonKindMaximumKey:      discard
-        of BsonKindMinimumKey:      discard
-        else:                       discard
+  BsonTimestamp* = object ## Internal MongoDB type used by mongos instances
+    increment*: int32
+    timestamp*: int32
 
+  Bson* = object of RootObj  ## Bson Node
+    key: string
+    case kind*: BsonKind
+    of BsonKindDouble:          valueFloat64:   float64
+    of BsonKindStringUTF8:      valueString:    string
+    of BsonKindDocument:        valueDocument:  seq[Bson]
+    of BsonKindArray:           valueArray:     seq[Bson]
+    of BsonKindBinary:
+                                valueBinary:    string
+                                subtype:        BsonSubtype
+    of BsonKindUndefined:       discard
+    of BsonKindOid:             valueOid:       Oid
+    of BsonKindBool:            valueBool:      bool
+    of BsonKindTimeUTC:         valueTime:      Time
+    of BsonKindNull:            discard
+    of BsonKindRegexp:
+                                expr1:          string
+                                expr2:          string
+    of BsonKindDBPointer:       discard
+    of BsonKindJSCode:          valueCode:      string
+    of BsonKindDeprecated:      valueDepr:      string
+    of BsonKindJSCodeWithScope: valueCodeWS:    string
+    of BsonKindInt32:           valueInt32:     int32
+    of BsonKindTimestamp:       valueTimestamp: int64
+    of BsonKindInt64:           valueInt64:     int64
+    of BsonKindMaximumKey:      discard
+    of BsonKindMinimumKey:      discard
+    else:                       discard
 
 converter toOid*(x: Bson): Oid =
     ## Convert Bson to Mongo Object ID
