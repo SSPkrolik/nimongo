@@ -17,15 +17,15 @@ type BsonKind* = enum
     BsonKindUndefined       = 0x06.char  ## Some undefined value (deprecated)
     BsonKindOid             = 0x07.char  ## Mongo Object ID
     BsonKindBool            = 0x08.char  ## boolean value
-    BsonKindTimeUTC         = 0x09.char
+    BsonKindTimeUTC         = 0x09.char  ## int64 milliseconds (Unix epoch time)
     BsonKindNull            = 0x0A.char  ## nil value stored in Mongo
-    BsonKindRegexp          = 0x0B.char
-    BsonKindDBPointer       = 0x0C.char
-    BsonKindJSCode          = 0x0D.char
-    BsonKindDeprecated      = 0x0E.char  ## DEPRECATED
-    BsonKindJSCodeWithScope = 0x0F.char
+    BsonKindRegexp          = 0x0B.char  ## Regular expression and options
+    BsonKindDBPointer       = 0x0C.char  ## Pointer to 'db.col._id'
+    BsonKindJSCode          = 0x0D.char  ## -
+    BsonKindDeprecated      = 0x0E.char  ## -
+    BsonKindJSCodeWithScope = 0x0F.char  ## -
     BsonKindInt32           = 0x10.char  ## 32-bit integer number
-    BsonKindTimestamp       = 0x11.char  ##
+    BsonKindTimestamp       = 0x11.char  ## -
     BsonKindInt64           = 0x12.char  ## 64-bit integer number
     BsonKindMaximumKey      = 0x7F.char  ## Maximum MongoDB comparable value
     BsonKindMinimumKey      = 0xFF.char  ## Minimum MongoDB comparable value
@@ -76,7 +76,9 @@ type
     of BsonKindRegexp:
                                 regex:          string
                                 options:        string
-    of BsonKindDBPointer:       discard
+    of BsonKindDBPointer:
+                                refCol:         string
+                                refOid:         Oid
     of BsonKindJSCode:          valueCode:      string
     of BsonKindDeprecated:      valueDepr:      string
     of BsonKindJSCodeWithScope: valueCodeWS:    string
@@ -201,6 +203,8 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0)
     of BsonKindRegexp:
         return bs.kind & bs.key & char(0) & bs.regex & char(0) & bs.options & char(0)
+    of BsonKindDBPointer:
+        return bs.kind & bs.key & char(0) & int32ToBytes(int32(len(bs.refCol)) + 1) & bs.refCol & char(0) & oidToBytes(bs.refOid)
     of BsonKindInt32:
         return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
     of BsonKindInt64:
@@ -261,6 +265,11 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": null" % [bs.key]
         of BsonKindRegexp:
             return "\"$#\": {\"$$regex\": \"$#\", \"$$options\": \"$#\"}" % [bs.key, bs.regex, bs.options]
+        of BsonKindDBPointer:
+            let
+              refcol = bs.refCol.split(".")[1]
+              refdb  = bs.refCol.split(".")[0]
+            return "\"$#\": {\"$$ref\": \"$#\", \"$$id\": \"$#\", \"$$db\": \"$#\"}" % [bs.key, refcol, $bs.refOid, refdb]
         of BsonKindInt32:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
         of BSonKindInt64:
@@ -298,6 +307,10 @@ template B*(key: string, val: Bson): expr =  ## Shortcut for _initBsonDocument
 
 template B*[T](key: string, values: seq[T]): expr =
     initBsonDocument()(key, values)
+
+proc dbref*(refcol: string, refoid: Oid): Bson =
+  ## Create new DBRef (database reference) MongoDB bson type
+  return Bson(key: "", kind: BsonKindDBPointer, refcol: refcol, refoid: refoid)
 
 proc undefined*(): Bson =
   ## Create new Bson 'undefined' value
@@ -410,6 +423,12 @@ proc initBsonDocument*(bytes: string): Bson =
             return doc(name.string, null())
         of BsonKindRegexp:
             return doc(name.string, regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp))))
+        of BsonKindDBPointer:
+            let
+              refcol: string = s.readStr(s.readInt32() - 1)
+              refoid: Oid = cast[Oid](s.readStr(12).cstring)
+            discard s.readChar()
+            return doc(name.string, dbref(refcol, refoid))
         of BsonKindInt32:
             return doc(name.string, s.readInt32())
         of BsonKindInt64:
@@ -441,6 +460,7 @@ when isMainModule:
         "maxkey", maxkey())(
         "regexp-field", regex("pattern", "ismx"))(
         "undefined", undefined())(
+        "someRef", dbref("db.col", genOid()))(
         "subdoc", initBsonDocument()(
             "salary", 500
         )(
