@@ -264,13 +264,16 @@ proc asyncInsert*(c: Collection, documents: seq[Bson], continueOnError: bool = f
     return true
 
 proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
-    ## Delete documents from MongoDB
-    {.locks: [c.client.requestLock].}:
-        let
-            sdoc = selector.bytes()
-            msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
+  ## Delete documents from MongoDB
+  {.locks: [c.client.requestLock].}:
+      let
+          sdoc = selector.bytes()
+          msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
 
-        return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
+      return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
+
+#proc asyncRemove*(c: Collection, selector: Bson): Future[bool] {.async.} =
+#  discard
 
 proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} =
     ## Update MongoDB document[s]
@@ -423,6 +426,30 @@ when isMainModule:
 
     echo "hello: ", 2+3
 
+
+    type
+      Base = ref object of RootObj
+        name: string
+
+      Sync = ref object of Base
+      Async = ref object of Base
+
+    proc run(b: Base): bool =
+      return true
+
+    proc run(b: Sync): bool =
+      return true
+
+    proc run(b: Async): Future[bool] {.async.} =
+      return false
+
+    let sync = new(Sync)
+    let async = new(Async)
+
+    echo(waitFor(sync.run()))
+    echo(waitFor(async.run()))
+
+    #echo(async.run()) # error
 
     #let asock: AsyncSocket = newAsyncSocket()
     #waitFor(asock.connect("127.0.0.1", asyncdispatch.Port(1)))
