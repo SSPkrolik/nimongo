@@ -95,21 +95,29 @@ waitFor(m.asyncRemove(B("doc1", 15)))
 ```
 
 Currently Supported Features
-----------------------------
+============================
 Here's a list of supported features with appropriate status icons:
 
  * :white_check_mark: - implemented feature
  * :red_circle: - __not__ implemented feature
  * :warning: - __partly__ supported or __unstable__
 
+BSON
+----
+
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
-| BSON Types |                 |                    |                    |
 |            | double          | :white_check_mark:                      |
 |            | string          | :white_check_mark:                      |
 |            | subdocument     | :white_check_mark:                      |
 |            | string          | :white_check_mark:                      |
 |            | array           | :white_check_mark:                      |
+
+MongoDB Features
+----------------
+
+| Block      | Feature         | Status (sync)      | Status (async)     |
+|-----------:|:----------------|:------------------:|:------------------:|
 | Operations |                 |                    |                    |
 |            | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
