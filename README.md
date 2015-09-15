@@ -136,7 +136,7 @@ within `nimongo.bson` Nim module.
 |            | UTC datetime    | :white_check_mark: |
 |            | Null            | :white_check_mark: |
 |            | RegExp          | :white_check_mark: |
-|            | DatabasePointer | :red_circle:       |
+|            | DBRef           | :white_check_mark: |
 |            | JavaScript code | :red_circle:       |
 |            | JavaScript code w/ scope|:red_circle:|
 |            | Int32           | :white_check_mark: |
