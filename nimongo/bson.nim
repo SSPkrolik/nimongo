@@ -14,7 +14,7 @@ type BsonKind* = enum
     BsonKindDocument        = 0x03.char  ## Embedded document
     BsonKindArray           = 0x04.char  ## Embedded array of Bson values
     BsonKindBinary          = 0x05.char  ## Generic binary data
-    BsonKindUndefined       = 0x06.char
+    BsonKindUndefined       = 0x06.char  ## Some undefined value (deprecated)
     BsonKindOid             = 0x07.char  ## Mongo Object ID
     BsonKindBool            = 0x08.char  ## boolean value
     BsonKindTimeUTC         = 0x09.char
@@ -189,6 +189,8 @@ proc bytes*(bs: Bson): string =
         for val in bs.valueArray: result = result & bytes(val)
         result = result & char(0)
         result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
+    of BsonKindUndefined:
+        return bs.kind & bs.key & char(0)
     of BsonKindOid:
         return bs.kind & bs.key & char(0) & oidToBytes(bs.valueOid)
     of BsonKindBool:
@@ -218,8 +220,6 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
         of BsonKindStringUTF8:
             return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
-        of BsonKindOid:
-            return "\"$#\": {\"$$oid\": \"$#\"}" % [bs.key, $bs.valueOid]
         of BsonKindDocument:
             var res: string = ""
             if bs.key != "":
@@ -247,6 +247,10 @@ proc `$`*(bs: Bson): string =
             for i in bs.valueBinary:
                 res = res & $ord(i)
             return res & "]"
+        of BsonKindUndefined:
+            return "\"$#\": null" % [bs.key]
+        of BsonKindOid:
+            return "\"$#\": {\"$$oid\": \"$#\"}" % [bs.key, $bs.valueOid]
         of BsonKindBool:
             return "\"$#\": $#" % [bs.key, if bs.valueBool == true: "true" else: "false"]
         of BsonKindTimeUTC:
@@ -291,9 +295,13 @@ template B*(key: string, val: Bson): expr =  ## Shortcut for _initBsonDocument
 template B*[T](key: string, values: seq[T]): expr =
     initBsonDocument()(key, values)
 
+proc undefined*(): Bson =
+  ## Create new Bson 'undefined' value
+  return Bson(key: "", kind: BsonKindUndefined)
+
 proc null*(): Bson =
-    ## Create new Bson 'null' value
-    return Bson(key: "", kind: BsonKindNull)
+  ## Create new Bson 'null' value
+  return Bson(key: "", kind: BsonKindNull)
 
 proc minkey*(): Bson =
   ## Create new Bson value representing 'Min key' bson type
@@ -375,6 +383,8 @@ proc initBsonDocument*(bytes: string): Bson =
             var subarr = initBsonArray()
             subarr.valueArray = subdoc.valueDocument
             return doc(name.string, subarr)
+        of BsonKindUndefined:
+            return doc(name.string, undefined())
         of BsonKindOid:
             let valueOid: Oid = cast[Oid](s.readStr(12).cstring)
             return doc(name.string, valueOid)
@@ -414,6 +424,7 @@ when isMainModule:
         "someNull", null())(
         "minkey", minkey())(
         "maxkey", maxkey())(
+        "undefined", undefined())(
         "subdoc", initBsonDocument()(
             "salary", 500
         )(
