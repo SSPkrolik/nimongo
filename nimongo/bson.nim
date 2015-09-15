@@ -315,17 +315,15 @@ proc maxkey*(): Bson =
   ## Create new Bson value representing 'Max key' bson type
   return Bson(key: "", kind: BsonKindMaximumKey)
 
+proc regex*(pattern: string, options: string): Bson =
+  ## Create new Bson value representing Regexp bson type
+  return Bson(key: "", kind: BsonKindRegexp, regex: pattern, options: options)
+
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
   result = bs
   var value: Bson = val
   value.key = key
-  result.valueDocument.add(value)
-
-proc `()`*(bs: Bson, key: string, pattern: string, options: string): Bson {.discardable.} =
-  ## Add RegExp field to bson object
-  result = bs
-  let value: Bson = Bson(key: key, kind: BsonKindRegexp, regex: pattern, options: options)
   result.valueDocument.add(value)
 
 proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
@@ -411,7 +409,7 @@ proc initBsonDocument*(bytes: string): Bson =
         of BsonKindNull:
             return doc(name.string, null())
         of BsonKindRegexp:
-            return doc(name.string, s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
+            return doc(name.string, regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp))))
         of BsonKindInt32:
             return doc(name.string, s.readInt32())
         of BsonKindInt64:
@@ -441,7 +439,7 @@ when isMainModule:
         "someNull", null())(
         "minkey", minkey())(
         "maxkey", maxkey())(
-        "regexp-field", "pattern", "ismx")(
+        "regexp-field", regex("pattern", "ismx"))(
         "undefined", undefined())(
         "subdoc", initBsonDocument()(
             "salary", 500
