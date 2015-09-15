@@ -80,4 +80,11 @@ echo "Async connection established: ", connected
 
 ## Inserting single document into MongoDB
 waitFor(m.asyncInsert(B("hello-async", "victory")))
+
+## Inserting multiple documents into MongoDB
+let
+  doc1 = B("doc1", 15)
+  doc2 = B("doc2", "string")
+
+waitFor(m.asyncInsert(@[doc1, doc2]))
 ```
