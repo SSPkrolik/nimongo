@@ -11,13 +11,14 @@ Here's a list of supported features with appropriate status icons:
  * :white_check_mark: - implemented feature
  * :no_entry: - __not__ implemented feature
 
-
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
 | Operations | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
 |            | Remove          | :white_check_mark: | :white_check_mark: |
-|            | Multiple Remove | :no_entry:         | :no_entry:         |
+|            | Remove multiple | :no_entry:         | :no_entry:         |
+|            | Update          | :white_check_mark: | :white_check_mark: |
+|            | Update multiple | :no_entry:         | :no_entry:         |
 
 Installation
 ------------
