@@ -23,6 +23,14 @@ list.
 
 Usage of synchronous client
 ---------------------------
+`nimongo.mongo.Mongo` synchronous client perform interaction with MongoDB
+over network using sockets and __blocking__ I/O which stops the thread it is
+used on from executing while MongoDB operation is not finished: either data
+is sent over network (_insert_, _update_, _remove_), or query (_find_) is done,
+and answer (or portion of it) is waited for.
+
+Mongo synchronous client is __thread-safe__. It uses simple `Lock` when
+executing commands and queries.
 
 ```nim
 import oids
@@ -64,6 +72,13 @@ for document in collection.find(B("name", "John")).items():
 
 Usage of async client
 ---------------------
+`nimongo.mongo.Mongo` can also work in an asynchronous mode based on
+`ayncdispatch` standard async mechanisms, and `asyncnet.AsyncSocket` sockets. It
+performs non-blocking I/O via `{.async.}` procedures.
+
+Mongo async client is __thread-safe__. It uses simple `Lock` when
+executing commands and queries.
+
 ```nim
 import asyncdispatch  ## Nim async-supportive functions here
 import oids
