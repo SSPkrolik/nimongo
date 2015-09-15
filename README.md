@@ -19,8 +19,8 @@ list.
 > WARNING! Current `master` version of `nimongo` works only with the
 > latest version of Nim from git repo: `devel` branch.
 
-Usage
------
+Usage of synchronous client
+---------------------------
 
 ```nim
 import oids
@@ -58,4 +58,21 @@ let documents = collection.find(B("name", "John")).all()
 ## Fetch all matching documents as a iterator
 for document in collection.find(B("name", "John")).items():
     echo document
+```
+
+Usage of async client
+---------------------
+```nim
+impot asyncdispatch
+import oids
+
+import nimongo.bson
+import nimongo.mongo
+
+## Create new Mongo client
+var m = newAsyncMongo().slaveOk(false)
+
+## Connect to Mongo server
+let connected = waitFor(m.asyncConnect())
+echo "Async connection established: ", connected
 ```

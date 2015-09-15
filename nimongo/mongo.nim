@@ -407,9 +407,6 @@ when isMainModule:
     #let list = collection.find(B("count", "collection")).one()
     #echo list
 
-    proc testasync(): Future[void] {.async.} =
-        let am: Mongo = newAsyncMongo()
-        let connected = await am.asyncConnect()
-        echo "Async connect result: ", connected
-
-    waitFor(testasync())
+    let am = newAsyncMongo()
+    let connected = waitFor(am.asyncConnect())
+    echo "Async connect result: ", connected
