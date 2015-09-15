@@ -435,32 +435,3 @@ when isMainModule:
     let someid = genOid()
     echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid))))
     echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))
-
-    discard """
-    let m: Mongo = newMongo().slaveOk().allowPartial()
-    discard m.connect()
-
-    echo "Is master: ", m.isMaster()
-
-    let collection = m["db"]["$cmd"]
-    #echo "Collection: ", collection
-    #let res: Find = collection.find(B("integer", 200)).exhaust()
-
-    #for doc in res.items():
-    #    stdout.write(".")
-    #echo ""
-
-    let c = m["db"]["collection"].count()
-    echo "db.collection contins $# documents." % [$c]
-
-    let c2 = m["db"]["collection"].find(B("string", "hello")).count()
-    echo "There are $# docs matching query." % [$c2]
-    #let list = collection.find(B("count", "collection")).one()
-    #echo list
-
-    let am = newAsyncMongo()
-    let connected = waitFor(am.asyncConnect())
-    echo "Async connect result: ", connected
-    waitFor(am["db"]["async"].asyncInsert(B("async", "document")))
-    echo "Inserted"
-    """

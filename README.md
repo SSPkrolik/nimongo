@@ -4,38 +4,7 @@ nimongo - Pure Nim MongoDB Driver
 `nimongo` has a main intention to provide developer-friendly way to interact
 with MongoDB using Nim programming language without any other dependencies.
 
-Currently Supported Features
-----------------------------
-Here's a list of supported features with appropriate status icons:
-
- * :white_check_mark: - implemented feature
- * :red_circle: - __not__ implemented feature
- * :warning: - __partly__ supported or __unstable__
-
-| Block      | Feature         | Status (sync)      | Status (async)     |
-|-----------:|:----------------|:------------------:|:------------------:|
-| BSON       |                 |                    |                    |
-|            | Serialization   | :warning:          | :warning:          |
-|            | Deserialization | :warning:          | :warning:          |
-| Operations |                 |                    |                    |
-|            | Insert          | :white_check_mark: | :white_check_mark: |
-|            | Multiple Insert | :white_check_mark: | :white_check_mark: |
-|            | Remove          | :white_check_mark: | :white_check_mark: |
-|            | Remove multiple | :red_circle:       | :red_circle:       |
-|            | Update          | :white_check_mark: | :red_circle:       |
-|            | Update multiple | :red_circle:       | :red_circle:       |
-|            | Upsert          | :red_circle:       | :red_circle:       |
-| Querying   |                 |                    |                    |
-|            | Find one        | :white_check_mark: | :red_circle:       |
-|            | Find            | :warning:          | :red_circle:       |
-|            | Skip            | :warning:          | :red_circle:       |
-|            | Limit           | :warning:          | :red_circle:       |
-|            | Tailable        | :warning:          | :red_circle:       |
-|            | Partial         | :warning:          | :red_circle:       |
-| Commands   |                 |                    |                    |
-|            | isMaster        | :white_check_mark: | :red_circle:       |
-| Replica    |                 | :red_circle:       | :red_circle:       |
-| GridFS     |                 | :red_circle:       | :red_circle:       |
+You can find a table of supported features at the bottom of the document.
 
 Installation
 ------------
@@ -124,3 +93,36 @@ waitFor(m.asyncInsert(@[doc1, doc2]))
 ## Removing single document from MongoDB
 waitFor(m.asyncRemove(B("doc1", 15)))
 ```
+
+Currently Supported Features
+----------------------------
+Here's a list of supported features with appropriate status icons:
+
+ * :white_check_mark: - implemented feature
+ * :red_circle: - __not__ implemented feature
+ * :warning: - __partly__ supported or __unstable__
+
+| Block      | Feature         | Status (sync)      | Status (async)     |
+|-----------:|:----------------|:------------------:|:------------------:|
+| BSON       |                 |                    |                    |
+|            | Serialization   | :warning:          | :warning:          |
+|            | Deserialization | :warning:          | :warning:          |
+| Operations |                 |                    |                    |
+|            | Insert          | :white_check_mark: | :white_check_mark: |
+|            | Multiple Insert | :white_check_mark: | :white_check_mark: |
+|            | Remove          | :white_check_mark: | :white_check_mark: |
+|            | Remove multiple | :red_circle:       | :red_circle:       |
+|            | Update          | :white_check_mark: | :red_circle:       |
+|            | Update multiple | :red_circle:       | :red_circle:       |
+|            | Upsert          | :red_circle:       | :red_circle:       |
+| Querying   |                 |                    |                    |
+|            | Find one        | :white_check_mark: | :red_circle:       |
+|            | Find            | :warning:          | :red_circle:       |
+|            | Skip            | :warning:          | :red_circle:       |
+|            | Limit           | :warning:          | :red_circle:       |
+|            | Tailable        | :warning:          | :red_circle:       |
+|            | Partial         | :warning:          | :red_circle:       |
+| Commands   |                 |                    |                    |
+|            | isMaster        | :white_check_mark: | :red_circle:       |
+| Replica    |                 | :red_circle:       | :red_circle:       |
+| GridFS     |                 | :red_circle:       | :red_circle:       |
