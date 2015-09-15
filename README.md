@@ -11,7 +11,8 @@ Currently Supported Features
 |-----------:|:----------------|:------------------:|:------------------:|
 | Operations | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
-
+|            | Remove          | :white_check_mark: | :white_check_mark: |
+|            | Multiple Remove | :no_entry:         | :no_entry:         |
 
 Installation
 ------------
