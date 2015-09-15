@@ -104,9 +104,12 @@ Here's a list of supported features with appropriate status icons:
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
-| BSON       |                 |                    |                    |
-|            | Serialization   | :warning:          | :warning:          |
-|            | Deserialization | :warning:          | :warning:          |
+| BSON Types |                 |                    |                    |
+|            | double          | :white_check_mark:                      |
+|            | string          | :white_check_mark:                      |
+|            | subdocument     | :white_check_mark:                      |
+|            | string          | :white_check_mark:                      |
+|            | array           | :white_check_mark:                      |
 | Operations |                 |                    |                    |
 |            | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
