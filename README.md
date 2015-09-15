@@ -26,7 +26,7 @@ Usage of synchronous client
 import oids
 
 import nimongo.bson  ## MongoDB BSON serialization/deserialization
-import nimongo.mongo ## MongoDB clinet
+import nimongo.mongo ## MongoDB client
 
 ## Create new Mongo client
 var m = newMongo().slaveOk(true).allowPartial(false)
@@ -63,16 +63,18 @@ for document in collection.find(B("name", "John")).items():
 Usage of async client
 ---------------------
 ```nim
-impot asyncdispatch
+import asyncdispatch  ## Nim async-supportive functions here
 import oids
 
-import nimongo.bson
-import nimongo.mongo
+import nimongo.bson   ## MongoDB BSON serialization/deserialization
+import nimongo.mongo  ## MongoDB client
 
 ## Create new Mongo client
-var m = newAsyncMongo().slaveOk(false)
+var m: Mongo = newAsyncMongo().slaveOk(false)  ## Still Mongo type
 
-## Connect to Mongo server
+## Connect to Mongo server with asynchronous socket
 let connected = waitFor(m.asyncConnect())
+
+## Testing connection establishing result
 echo "Async connection established: ", connected
 ```
