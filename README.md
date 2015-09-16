@@ -149,7 +149,7 @@ within `nimongo.bson` Nim module.
 |            | Binary (Old)    | :red_circle:       |
 |            | UUID (Old)      | :red_circle:       |
 |            | UUID            | :red_circle:       |
-|            | MD5             | :red_circle:       |
+|            | MD5             | :white_check_mark: |
 |            | User-defined    | :red_circle:       |
 
 MongoDB Features
