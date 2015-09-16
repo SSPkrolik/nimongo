@@ -1,4 +1,5 @@
 import algorithm
+import md5
 import oids
 import sequtils
 import streams
@@ -34,9 +35,9 @@ type BsonSubtype* = enum
     BsonSubtypeGeneric      = 0x00.char  ##
     BsonSubtypeFunction     = 0x01.char  ##
     BsonSubtypeBinaryOld    = 0x02.char  ##
-    BsonSubtypeUUIDOld      = 0x03.char  ##
-    BsonSubtypeUUID         = 0x04.char  ##
-    BsonSubtypeMD5          = 0x05.char  ##
+    BsonSubtypeUuidOld      = 0x03.char  ##
+    BsonSubtypeUuid         = 0x04.char  ##
+    BsonSubtypeMd5          = 0x05.char  ##
     BsonSubtypeUserDefined  = 0x80.char  ##
 
 converter toChar*(bk: BsonKind): char =
@@ -61,33 +62,40 @@ type
   Bson* = object of RootObj  ## Bson Node
     key: string
     case kind*: BsonKind
-    of BsonKindDouble:          valueFloat64:   float64
-    of BsonKindStringUTF8:      valueString:    string
-    of BsonKindDocument:        valueDocument:  seq[Bson]
-    of BsonKindArray:           valueArray:     seq[Bson]
+    of BsonKindDouble:           valueFloat64:   float64
+    of BsonKindStringUTF8:       valueString:    string
+    of BsonKindDocument:         valueDocument:  seq[Bson]
+    of BsonKindArray:            valueArray:     seq[Bson]
     of BsonKindBinary:
-                                valueBinary:    string
-                                subtype:        BsonSubtype
-    of BsonKindUndefined:       discard
-    of BsonKindOid:             valueOid:       Oid
-    of BsonKindBool:            valueBool:      bool
-    of BsonKindTimeUTC:         valueTime:      Time
-    of BsonKindNull:            discard
+      case subtype:                              BsonSubtype
+      of BsonSubtypeGeneric:     valueGeneric:   string
+      of BsonSubtypeFunction:    valueFunction:  string
+      of BsonSubtypeBinaryOld:   valueBinOld:    string
+      of BsonSubtypeUuidOld:     valueUuidOld:   string
+      of BsonSubtypeUuid:        valueUuid:      string
+      of BsonSubtypeMd5:         valueDigest:    MD5Digest
+      of BsonSubtypeUserDefined: valueUserDefined: string
+      else: discard
+    of BsonKindUndefined:        discard
+    of BsonKindOid:              valueOid:       Oid
+    of BsonKindBool:             valueBool:      bool
+    of BsonKindTimeUTC:          valueTime:      Time
+    of BsonKindNull:             discard
     of BsonKindRegexp:
-                                regex:          string
-                                options:        string
+                                 regex:          string
+                                 options:        string
     of BsonKindDBPointer:
-                                refCol:         string
-                                refOid:         Oid
-    of BsonKindJSCode:          valueCode:      string
-    of BsonKindDeprecated:      valueDepr:      string
-    of BsonKindJSCodeWithScope: valueCodeWS:    string
-    of BsonKindInt32:           valueInt32:     int32
-    of BsonKindTimestamp:       valueTimestamp: int64
-    of BsonKindInt64:           valueInt64:     int64
-    of BsonKindMaximumKey:      discard
-    of BsonKindMinimumKey:      discard
-    else:                       discard
+                                 refCol:         string
+                                 refOid:         Oid
+    of BsonKindJSCode:           valueCode:      string
+    of BsonKindDeprecated:       valueDepr:      string
+    of BsonKindJSCodeWithScope:  valueCodeWS:    string
+    of BsonKindInt32:            valueInt32:     int32
+    of BsonKindTimestamp:        valueTimestamp: int64
+    of BsonKindInt64:            valueInt64:     int64
+    of BsonKindMaximumKey:       discard
+    of BsonKindMinimumKey:       discard
+    else:                        discard
 
 converter toOid*(x: Bson): Oid =
     ## Convert Bson to Mongo Object ID
@@ -250,11 +258,11 @@ proc `$`*(bs: Bson): string =
             ident = ident[0..len(ident) - 3]
             res = res & "]"
             return res
-        of BsonKindBinary:
-            var res: string = "\"$#\" ($#): [" % [bs.key, $bs.subtype]
-            for i in bs.valueBinary:
-                res = res & $ord(i)
-            return res & "]"
+        #of BsonKindBinary:
+        #    var res: string = "\"$#\" ($#): [" % [bs.key, $bs.subtype]
+        #    for i in bs.valueBinary:
+        #        res = res & $ord(i)
+        #    return res & "]"
         of BsonKindUndefined:
             return "\"$#\": null" % [bs.key]
         of BsonKindOid:
