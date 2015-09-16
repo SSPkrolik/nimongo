@@ -145,7 +145,7 @@ within `nimongo.bson` Nim module.
 |            | Minimum Key     | :white_check_mark: |
 |            | Maximum Key     | :white_check_mark: |
 | Binary Subtypes |            |                    |
-|            | Generic         | :red_circle:       |
+|            | Generic         | :white_check_mark: |
 |            | Binary (Old)    | :red_circle:       |
 |            | UUID (Old)      | :red_circle:       |
 |            | UUID            | :red_circle:       |
