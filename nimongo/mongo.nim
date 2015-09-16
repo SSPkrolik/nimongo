@@ -437,5 +437,5 @@ when isMainModule:
     discard waitFor(a["db"]["async"].asyncInsert(B("code", js("function identity(x) {return x;}"))))
 
     let someid = genOid()
-    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("dig", toMd5("")))))
+    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("image", bin("asd")))))
     #echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))

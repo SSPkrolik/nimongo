@@ -1,4 +1,5 @@
 import algorithm
+import base64
 import md5
 import oids
 import sequtils
@@ -217,6 +218,8 @@ proc bytes*(bs: Bson): string =
             for i in 0..<bs.valueDigest.len():
                 add(sdig, bs.valueDigest[i].char)
             return bs.kind & bs.key & char(0) & int32ToBytes(int32(16)) & bs.subtype.char & sdig
+        of BsonSubtypeGeneric:
+            return bs.kind & bs.key & char(0) & int32ToBytes(int32(bs.valueGeneric.len())) & bs.subtype.char & bs.valueGeneric
         else:
             raise new(Exception)
     of BsonKindUndefined:
@@ -282,6 +285,8 @@ proc `$`*(bs: Bson): string =
             case bs.subtype
             of BsonSubtypeMd5:
                 return "\"$#\": {\"$$md5\": \"$#\"}" % [bs.key, $bs.valueDigest]
+            of BsonSubtypeGeneric:
+                return "\"$#\": {\"$$bindata\": \"$#\"}" % [bs.key, base64.encode(bs.valueGeneric)]
             else:
                 raise new(Exception)
         of BsonKindUndefined:
@@ -369,6 +374,10 @@ proc js*(code: string): Bson =
   ## Create new Bson value representing JavaScript code bson type
   return Bson(key: "", kind: BsonKindJSCode, valueCode: code)
 
+proc bin*(bindata: string): Bson =
+  ## Create new binary Bson object with 'generic' subtype
+  return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeGeneric, valueGeneric: bindata)
+
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
   result = bs
@@ -453,6 +462,8 @@ proc initBsonDocument*(bytes: string): Bson =
             case st:
             of BsonSubtypeMd5:
                 return doc(name.string, cast[MD5Digest](s.readStr(ds).cstring))
+            of BsonSubtypeGeneric:
+                return doc(name.string, bin(s.readStr(ds)))
             else:
                 raise new(Exception)
         of BsonKindUndefined:
@@ -501,6 +512,7 @@ when isMainModule:
     echo "Testing nimongo/bson.nim module..."
     let oid = genOid()
     var bdoc: Bson = initBsonDocument()(
+        "image", bin("12312l3jkalksjslkvdsdas"))(
         "balance", 1000.23)(
         "name", "John")(
         "someId", oid)(
