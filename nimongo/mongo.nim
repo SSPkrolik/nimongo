@@ -425,6 +425,8 @@ proc count*(f: Find): int =
         return x.toFloat64().int
 
 when isMainModule:
+    import md5
+
     let
       m: Mongo = newMongo()
       a: Mongo = newAsyncMongo()
@@ -435,5 +437,5 @@ when isMainModule:
     discard waitFor(a["db"]["async"].asyncInsert(B("code", js("function identity(x) {return x;}"))))
 
     let someid = genOid()
-    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("undef", undefined()))))
-    echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))
+    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("dig", toMd5("")))))
+    #echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))

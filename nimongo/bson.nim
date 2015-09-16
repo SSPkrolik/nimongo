@@ -62,37 +62,37 @@ type
   Bson* = object of RootObj  ## Bson Node
     key: string
     case kind*: BsonKind
-    of BsonKindDouble:           valueFloat64:   float64
-    of BsonKindStringUTF8:       valueString:    string
-    of BsonKindDocument:         valueDocument:  seq[Bson]
-    of BsonKindArray:            valueArray:     seq[Bson]
+    of BsonKindDouble:           valueFloat64:     float64
+    of BsonKindStringUTF8:       valueString:      string
+    of BsonKindDocument:         valueDocument:    seq[Bson]
+    of BsonKindArray:            valueArray:       seq[Bson]
     of BsonKindBinary:
-      case subtype:                              BsonSubtype
-      of BsonSubtypeGeneric:     valueGeneric:   string
-      of BsonSubtypeFunction:    valueFunction:  string
-      of BsonSubtypeBinaryOld:   valueBinOld:    string
-      of BsonSubtypeUuidOld:     valueUuidOld:   string
-      of BsonSubtypeUuid:        valueUuid:      string
-      of BsonSubtypeMd5:         valueDigest:    MD5Digest
+      case subtype:                                BsonSubtype
+      of BsonSubtypeGeneric:     valueGeneric:     string
+      of BsonSubtypeFunction:    valueFunction:    string
+      of BsonSubtypeBinaryOld:   valueBinOld:      string
+      of BsonSubtypeUuidOld:     valueUuidOld:     string
+      of BsonSubtypeUuid:        valueUuid:        string
+      of BsonSubtypeMd5:         valueDigest:      MD5Digest
       of BsonSubtypeUserDefined: valueUserDefined: string
       else: discard
     of BsonKindUndefined:        discard
-    of BsonKindOid:              valueOid:       Oid
-    of BsonKindBool:             valueBool:      bool
-    of BsonKindTimeUTC:          valueTime:      Time
+    of BsonKindOid:              valueOid:         Oid
+    of BsonKindBool:             valueBool:        bool
+    of BsonKindTimeUTC:          valueTime:        Time
     of BsonKindNull:             discard
     of BsonKindRegexp:
-                                 regex:          string
-                                 options:        string
+                                 regex:            string
+                                 options:          string
     of BsonKindDBPointer:
-                                 refCol:         string
-                                 refOid:         Oid
-    of BsonKindJSCode:           valueCode:      string
-    of BsonKindDeprecated:       valueDepr:      string
-    of BsonKindJSCodeWithScope:  valueCodeWS:    string
-    of BsonKindInt32:            valueInt32:     int32
-    of BsonKindTimestamp:        valueTimestamp: int64
-    of BsonKindInt64:            valueInt64:     int64
+                                 refCol:           string
+                                 refOid:           Oid
+    of BsonKindJSCode:           valueCode:        string
+    of BsonKindDeprecated:       valueDepr:        string
+    of BsonKindJSCodeWithScope:  valueCodeWS:      string
+    of BsonKindInt32:            valueInt32:       int32
+    of BsonKindTimestamp:        valueTimestamp:   int64
+    of BsonKindInt64:            valueInt64:       int64
     of BsonKindMaximumKey:       discard
     of BsonKindMinimumKey:       discard
     else:                        discard
@@ -153,6 +153,17 @@ converter toBson*(x: Time): Bson =
     ## Convert Time to Bson object
     return Bson(key: "", kind: BsonKindTimeUTC, valueTime: x)
 
+converter toBson*(x: MD5Digest): Bson =
+  ## Convert MD5Digest to Bson object
+  return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
+
+converter toBson(x: var MD5Context): Bson =
+  ## Convert MD5Context to Bson object (still digest from current context).
+  ## :WARNING: MD5Context is finalized during conversion.
+  var digest: MD5Digest
+  x.md5Final(digest)
+  return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: digest)
+
 proc int32ToBytes*(x: int32): string =
     ## Convert int32 data piece into series of bytes
     let a = toSeq(cast[array[0..3, char]](x).items())
@@ -199,6 +210,15 @@ proc bytes*(bs: Bson): string =
         for val in bs.valueArray: result = result & bytes(val)
         result = result & char(0)
         result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
+    of BsonKindBinary:
+        case bs.subtype
+        of BsonSubtypeMd5:
+            var sdig: string = newStringOfCap(16)
+            for i in 0..<bs.valueDigest.len():
+                add(sdig, bs.valueDigest[i].char)
+            return bs.kind & bs.key & char(0) & int32ToBytes(int32(16)) & bs.subtype.char & sdig
+        else:
+            raise new(Exception)
     of BsonKindUndefined:
         return bs.kind & bs.key & char(0)
     of BsonKindOid:
@@ -258,11 +278,12 @@ proc `$`*(bs: Bson): string =
             ident = ident[0..len(ident) - 3]
             res = res & "]"
             return res
-        #of BsonKindBinary:
-        #    var res: string = "\"$#\" ($#): [" % [bs.key, $bs.subtype]
-        #    for i in bs.valueBinary:
-        #        res = res & $ord(i)
-        #    return res & "]"
+        of BsonKindBinary:
+            case bs.subtype
+            of BsonSubtypeMd5:
+                return "\"$#\": {\"$$md5\": \"$#\"}" % [bs.key, $bs.valueDigest]
+            else:
+                raise new(Exception)
         of BsonKindUndefined:
             return "\"$#\": null" % [bs.key]
         of BsonKindOid:
@@ -425,6 +446,15 @@ proc initBsonDocument*(bytes: string): Bson =
             var subarr = initBsonArray()
             subarr.valueArray = subdoc.valueDocument
             return doc(name.string, subarr)
+        of BsonKindBinary:
+            let
+                ds: int32 = s.readInt32()
+                st: BsonSubtype = s.readChar().BsonSubtype
+            case st:
+            of BsonSubtypeMd5:
+                return doc(name.string, cast[MD5Digest](s.readStr(ds).cstring))
+            else:
+                raise new(Exception)
         of BsonKindUndefined:
             return doc(name.string, undefined())
         of BsonKindOid:
@@ -479,6 +509,7 @@ when isMainModule:
         "someNull", null())(
         "minkey", minkey())(
         "maxkey", maxkey())(
+        "digest", "".toMd5())(
         "regexp-field", regex("pattern", "ismx"))(
         "undefined", undefined())(
         "someJS", js("function identity(x) {return x;}"))(
