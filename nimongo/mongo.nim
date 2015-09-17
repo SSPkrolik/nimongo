@@ -408,6 +408,10 @@ proc isMaster*(m: Mongo): bool =
     ## Perform query in order to check if connected Mongo instance is a master
     return m["admin"]["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
 
+proc drop*(c: Collection): bool =
+  ## Drop collection from database
+  return c.db["$cmd"].find(B("drop", c.name)).one()["ok"] == 1.0
+
 proc count*(c: Collection): int =
     ## Return number of documents in collection
     let x = c.db["$cmd"].find(B("count", c.name)).one()["n"]
@@ -439,3 +443,5 @@ when isMainModule:
     let someid = genOid()
     echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("image", bin("asd")))))
     #echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))
+
+    echo(m["db"]["async"].drop())

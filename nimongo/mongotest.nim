@@ -2,8 +2,8 @@ import asyncdispatch
 import oids
 import unittest
 
-import nimongo.bson
-import nimongo.mongo
+import bson
+import mongo
 
 suite "Mongo client test suite":
 
