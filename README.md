@@ -174,7 +174,9 @@ This table represents MongoDB features and their implementation status within
 |            | Limit           | :warning:          | :red_circle:       |
 |            | Tailable        | :warning:          | :red_circle:       |
 |            | Partial         | :warning:          | :red_circle:       |
-| Commands   |                 | __1__:__0__/__1__  | __0__:__0__/__1__  |
+|Collections |                 | __1__:__0__/__1__  | __0__:__0__/__1__  |
+|            | Drop collection | :white_check_mark: | :red_circle:       |
+|Admin Commands|               | __1__:__0__/__1__  | __0__:__0__/__1__  |
 |            | isMaster        | :white_check_mark: | :red_circle:       |
 | Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
 |            | Replica Set     | :red_circle:       | :red_circle:       |
