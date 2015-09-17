@@ -159,7 +159,7 @@ This table represents MongoDB features and their implementation status within
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
-| Operations |                 |                    |                    |
+| Operations |                 | __4__:__0__/__7__  | __3__:__0__/__7__  |
 |            | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
 |            | Remove          | :white_check_mark: | :white_check_mark: |
@@ -167,21 +167,27 @@ This table represents MongoDB features and their implementation status within
 |            | Update          | :white_check_mark: | :red_circle:       |
 |            | Update multiple | :red_circle:       | :red_circle:       |
 |            | Upsert          | :red_circle:       | :red_circle:       |
-| Querying   |                 |                    |                    |
+| Querying   |                 | __1__:__5__/__6__  | __0__:__0__/__6__  |
 |            | Find one        | :white_check_mark: | :red_circle:       |
 |            | Find            | :warning:          | :red_circle:       |
 |            | Skip            | :warning:          | :red_circle:       |
 |            | Limit           | :warning:          | :red_circle:       |
 |            | Tailable        | :warning:          | :red_circle:       |
 |            | Partial         | :warning:          | :red_circle:       |
-| Commands   |                 |                    |                    |
+| Commands   |                 | __1__:__0__/__1__  | __0__:__0__/__1__  |
 |            | isMaster        | :white_check_mark: | :red_circle:       |
-| Replica    |                 | :red_circle:       | :red_circle:       |
-| GridFS     |                 | :red_circle:       | :red_circle:       |
-| Indices    |                 |                    |                    |
+| Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+|            |                 | :red_circle:       | :red_circle:       |
+| GridFS     |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+|            |                 | :red_circle:       | :red_circle:       |
+| Indices    |                 | __0__:__0__/__4__  | __0__:__0__/__4__  |
 |            | Create Index    | :red_circle:       | :red_circle:       |
 |            | Drop Index      | :red_circle:       | :red_circle:       |
 |            | Drop Indices    | :red_circle:       | :red_circle:       |
 |            | Ensure Index    | :red_circle:       | :red_circle:       |
+|Aggreagation|                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+|            | Aggregate       | :red_circle:       | :red_circle:       |
+| Map/Reduce |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+|            | MapReduce       | :red_circle:       | :red_circle:       |
 
 __P.S.__ Contribution is welcomed :)
