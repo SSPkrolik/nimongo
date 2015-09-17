@@ -178,6 +178,10 @@ This table represents MongoDB features and their implementation status within
 |            | isMaster        | :white_check_mark: | :red_circle:       |
 | Replica    |                 | :red_circle:       | :red_circle:       |
 | GridFS     |                 | :red_circle:       | :red_circle:       |
-
+| Indices    |                 |                    |                    |
+|            | Create Index    | :red_circle:       | :red_circle:       |
+|            | Drop Index      | :red_circle:       | :red_circle:       |
+|            | Drop Indices    | :red_circle:       | :red_circle:       |
+|            | Ensure Index    | :red_circle:       | :red_circle:       |
 
 __P.S.__ Contribution is welcomed :)
