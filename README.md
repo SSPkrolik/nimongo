@@ -177,9 +177,9 @@ This table represents MongoDB features and their implementation status within
 | Commands   |                 | __1__:__0__/__1__  | __0__:__0__/__1__  |
 |            | isMaster        | :white_check_mark: | :red_circle:       |
 | Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
-|            |                 | :red_circle:       | :red_circle:       |
+|            | Replica Set     | :red_circle:       | :red_circle:       |
 | GridFS     |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
-|            |                 | :red_circle:       | :red_circle:       |
+|            | GridFS          | :red_circle:       | :red_circle:       |
 | Indices    |                 | __0__:__0__/__4__  | __0__:__0__/__4__  |
 |            | Create Index    | :red_circle:       | :red_circle:       |
 |            | Drop Index      | :red_circle:       | :red_circle:       |
