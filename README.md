@@ -87,7 +87,7 @@ import nimongo.bson   ## MongoDB BSON serialization/deserialization
 import nimongo.mongo  ## MongoDB client
 
 ## Create new Mongo client
-var m: Mongo = newAsyncMongo().slaveOk(false)  ## Still Mongo type
+var m: AsyncMongo = newAsyncMongo().slaveOk(false)  ## Still Mongo type
 
 ## Connect to Mongo server with asynchronous socket
 let connected = waitFor(m.connect())
