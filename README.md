@@ -173,9 +173,10 @@ This table represents MongoDB features and their implementation status within
 |            | Update single   | :white_check_mark: | :white_check_mark: |
 |            | Update multiple | :red_circle:       | :red_circle:       |
 |            | Upsert          | :red_circle:       | :red_circle:       |
-| Querying   |                 | __1__ / __6__      | __0__ / __6__      |
-|            | Find one        | :white_check_mark: | :red_circle:       |
-|            | Find            | :warning:          | :red_circle:       |
+| Querying   |                 | __1__ / __6__      | __1__ / __6__      |
+|            | Find one        | :white_check_mark: | :white_check_mark: |
+|            | Find all        | :warning:          | :red_circle:       |
+|            | Find iterator   | :warning:          | :red_circle:       |
 |            | Skip            | :warning:          | :red_circle:       |
 |            | Limit           | :warning:          | :red_circle:       |
 |            | Tailable        | :warning:          | :red_circle:       |
