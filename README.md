@@ -90,23 +90,23 @@ import nimongo.mongo  ## MongoDB client
 var m: Mongo = newAsyncMongo().slaveOk(false)  ## Still Mongo type
 
 ## Connect to Mongo server with asynchronous socket
-let connected = waitFor(m.asyncConnect())
+let connected = waitFor(m.connect())
 
 ## Testing connection establishing result
 echo "Async connection established: ", connected
 
 ## Inserting single document into MongoDB
-waitFor(m.asyncInsert(B("hello-async", "victory")))
+waitFor(m.insert(B("hello-async", "victory")))
 
 ## Inserting multiple documents into MongoDB
 let
   doc1 = B("doc1", 15)
   doc2 = B("doc2", "string")
 
-waitFor(m.asyncInsert(@[doc1, doc2]))
+waitFor(m.insert(@[doc1, doc2]))
 
 ## Removing single document from MongoDB
-waitFor(m.asyncRemove(B("doc1", 15)))
+waitFor(m.remove(B("doc1", 15)))
 ```
 
 Currently Supported Features
