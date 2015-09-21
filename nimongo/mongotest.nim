@@ -5,27 +5,32 @@ import unittest
 import bson
 import mongo
 
+const
+  TestDB       = "test-db"
+  TestSyncCol  = "test-sync"
+  TestAsyncCol = "test-async"
+
 suite "Mongo instance administration commands test suite":
 
   setup:
-    # Mongo clients
     var
-      sm: Mongo = newMongo()
-      am: AsyncMongo = newAsyncMongo()
+      sm: Mongo = newMongo()           ## Mongo synchronous client
+      am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
 
     # Connection is required for running tests
     require(sm.connect() == true)
     require(waitFor(am.connect()) == true)
 
-    # Collections for test must be empty
-    #require(sm["db"]["sync"].drop() == true)
-    #require(waitFor(am["db"]["async"].asyncDrop()) == true)
+    # Collections must not exist before tests in the suite
+    discard sm[TestDB][TestSyncCol].drop()
+    discard waitFor(am[TestDB][TestAsyncCol].drop())
 
-  test "Command: 'isMaster()'":
-    let ismasters = sm.isMaster()
-    #let ismastera = waitFor(am.isMaster())
-    check(ismasters == true or ismasters == false)
-    #check(ismastera == true or ismastera == false)
+  test "[ASYNC] [SYNC] Command: 'isMaster'":
+    var m: bool
+    m = sm.isMaster()
+    check(m == true or m == false)
+    m = waitFor(am.isMaster())
+    check(m == true or m == false)
 
 discard """
 

@@ -84,10 +84,10 @@ type
 
 # === Private APIs === #
 
-proc nextRequestId(m: Mongo): int32 =
+proc nextRequestId(mb: MongoBase): int32 =
     ## Return next request id for current MongoDB client
-    m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
-    return m.requestId
+    mb.requestId = (mb.requestId + 1) mod (int32.high - 1'i32)
+    return mb.requestId
 
 proc newCursor[T](c: Collection[T]): Cursor[T] =
     ## Private constructor for the Find object. Find acts by taking
@@ -396,22 +396,47 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32): Bson {.closure.} 
         else:
           discard
 
-proc asyncPerformFind(f: Cursor, numberToReturn: int32): Future[seq[Bson]] {.async.} =
+proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32): Future[seq[Bson]] {.async.} =
   ## Private procedure for performing actual query to Mongo via async client
   {.locks: [f.collection.client.requestLock].}:
-    await f.collection.client.asock.send(prepareQuery(f, numberToReturn))
-    return @[initBsonDocument()]
+    await f.collection.client.sock.send(prepareQuery(f, numberToReturn))
+    ## Read Length
+    var
+      data: string = await f.collection.client.sock.recv(4)
+      stream: Stream = newStringStream(data)
+    let messageLength: int32 = stream.readInt32()
+
+    ## Read data
+    data = newStringOfCap(messageLength - 4)
+    data = await f.collection.client.sock.recv(messageLength - 4)
+
+    stream = newStringStream(data)
+
+    let requestID: int32 = stream.readInt32()
+    let responseTo: int32 = stream.readInt32()
+    let opCode: OperationKind = stream.readInt32().OperationKind
+    let responseFlags: int32 = stream.readInt32()
+    let cursorID: int64 = stream.readInt64()
+    let startingFrom: int32 = stream.readInt32()
+    let numberReturned: int32 = stream.readInt32()
+
+    result = @[]
+
+    if numberReturned > 0:
+      for i in 0..<numberReturned:
+        let docSize = stream.readInt32()
+        stream.setPosition(stream.getPosition() - 4)
+        let sdoc: string = stream.readStr(docSize)
+        result.add(initBsonDocument(sdoc))
+      return
+    elif numberToReturn == 1:
+      raise newException(NotFound, "No documents matching query were found")
 
 proc all*(f: Cursor): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
     result = @[]
     for doc in f.performFind(0):
         result.add(doc)
-
-proc asyncOne(f: Cursor): Future[Bson] {.async.} =
-  ## Return one document found by making query to Mongo via async client
-  let res = await asyncPerformFind(f, 1)
-  return res[0]
 
 proc one*(f: Cursor[Mongo]): Bson =
     ## Perform MongoDB query and return first matching document
@@ -420,7 +445,8 @@ proc one*(f: Cursor[Mongo]): Bson =
 
 proc one*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
   ## Perform MongoDB query asynchronously and return first matching document.
-  return initBsonDocument()
+  let docs = await f.performFindAsync(1)
+  return docs[0]
 
 iterator items*(f: Cursor): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
@@ -437,14 +463,18 @@ proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
   let response = await am["admin"]["$cmd"].find(B("isMaster", 1)).one()
   return response["ismaster"]
 
-proc asyncDrop*(c: Collection): Future[bool] {.async.} =
-  ## Drop collection from database via async clinet
-  let res = await c.db["$cmd"].find(B("drop", c.name)).asyncOne()
-  return res["ok"] == 1.0
-
-proc drop*(c: Collection): bool =
+proc drop*(c: Collection[Mongo]): tuple[ok: bool, message: string] =
   ## Drop collection from database
-  return c.db["$cmd"].find(B("drop", c.name)).one()["ok"] == 1.0
+  let response = c.db["$cmd"].find(B("drop", c.name)).one()
+  let ok = response["ok"] == 1.0
+  return (ok: ok, message: if ok: "" else: response["errmsg"])
+
+proc drop*(c: Collection[AsyncMongo]): Future[tuple[ok: bool, message: string]] {.async.} =
+  ## Drop collection from database via async clinet
+  let response = await c.db["$cmd"].find(B("drop", c.name)).one()
+  let ok = response["ok"] == 1.0
+  return (ok: ok, message: if ok: "" else: response["errmsg"])
+
 
 proc count*(c: Collection): int =
     ## Return number of documents in collection
