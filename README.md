@@ -165,11 +165,11 @@ This table represents MongoDB features and their implementation status within
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
-| Operations |                 | __4__:__0__/__7__  | __3__:__0__/__7__  |
+| Operations |                 | __5__ / __7__      | __4__ / __7__      |
 |            | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
 |            | Remove          | :white_check_mark: | :white_check_mark: |
-|            | Remove multiple | :red_circle:       | :red_circle:       |
+|            | Remove multiple | :white_check_mark: | :white_check_mark: |
 |            | Update          | :white_check_mark: | :red_circle:       |
 |            | Update multiple | :red_circle:       | :red_circle:       |
 |            | Upsert          | :red_circle:       | :red_circle:       |
