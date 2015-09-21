@@ -98,6 +98,11 @@ type
     of BsonKindMinimumKey:       discard
     else:                        discard
 
+
+converter toBson*(x: Oid): Bson =
+    ## Convert Mongo Object Id to Bson object
+    return Bson(key: "", kind: BsonKindOid, valueOid: x)
+
 converter toOid*(x: Bson): Oid =
     ## Convert Bson to Mongo Object ID
     return x.valueOid
@@ -110,17 +115,21 @@ converter toFloat64*(x: Bson): float64 =
     ## Convert Bson object to float64
     return x.valueFloat64
 
-converter toString*(x: Bson): string =
-    ## Convert Bson to UTF8 string
-    return x.valueString
-
 converter toBson*(x: string): Bson =
     ## Convert string to Bson object
     return Bson(key: "", kind: BsonKindStringUTF8, valueString: x)
 
+converter toString*(x: Bson): string =
+    ## Convert Bson to UTF8 string
+    return x.valueString
+
 converter toBson*(x: int64): Bson =
     ## Convert int64 to Bson object
     return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
+
+converter toInt64*(x: Bson): int64 =
+    ## Convert Bson object to int
+    return x.valueInt64
 
 converter toBson*(x: int32): Bson =
     ## Convert int32 to Bson object
@@ -134,10 +143,6 @@ converter toBson*(x: int): Bson =
     ## Convert int to Bson object
     return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
 
-converter toInt64*(x: Bson): int64 =
-    ## Convert Bson object to int
-    return x.valueInt64
-
 converter toBson*(x: bool): Bson =
     ## Convert bool to Bson object
     return Bson(key: "", kind: BsonKindBool, valueBool: x)
@@ -146,13 +151,13 @@ converter toBool*(x: Bson): bool =
     ## Convert Bson object to bool
     return x.valueBool
 
-converter toBson*(x: Oid): Bson =
-    ## Convert Mongo Object Id to Bson object
-    return Bson(key: "", kind: BsonKindOid, valueOid: x)
-
 converter toBson*(x: Time): Bson =
     ## Convert Time to Bson object
     return Bson(key: "", kind: BsonKindTimeUTC, valueTime: x)
+
+converter toTime*(x: Bson): Time =
+    ## Convert Bson object to Time
+    return x.valueTime
 
 converter toBson*(x: MD5Digest): Bson =
   ## Convert MD5Digest to Bson object

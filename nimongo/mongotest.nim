@@ -72,12 +72,16 @@ suite "Mongo client test suite":
     check(sco.insert(@[doc1, doc2, doc3]) == true)
     check(waitFor(aco.insert(@[doc1, doc2, doc3])) == true)
 
-  test "[     ] [SYNC] Update single document":
+  test "[ASYNC] [SYNC] Update single document":
     let
       selector = B("integer", 100'i32)
-      updater  = B("$set", B("integer", 200))
+      updater  = B("$set", B("integer", 200'i32))
 
     check(sco.update(selector, updater) == true)
+    check(waitFor(aco.update(selector, updater)) == true)
+
+    check(sco.find(B("integer", 200)).one()["integer"].toInt32() == 200)
+    check(waitFor(aco.find(B("integer", 200)).one())["integer"].toInt32() == 200)
 
   test "[ASYNC] [SYNC] Remove single document":
     let doc = B("string", "hello")

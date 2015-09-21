@@ -303,6 +303,19 @@ proc update*(c: Collection[Mongo], selector: Bson, update: Bson): bool {.discard
       msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
     return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
+proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson): Future[bool] {.async.} =
+  ## Update MongoDB document[s] via async connection
+  {.locks: [c.client.requestLock].}:
+    let
+      ssel = selector.bytes()
+      supd = update.bytes()
+      msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
+    try:
+      await c.client.sock.send(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
+    except OSError:
+      return false
+    return true
+
 proc find*[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
   ## Create lazy query object to MongoDB that can be actually run
   ## by one of the Find object procedures: `one()` or `all()`.
