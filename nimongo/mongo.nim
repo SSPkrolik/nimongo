@@ -269,22 +269,23 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], continueOnError: b
       return false
     return true
 
-proc remove*(c: Collection[Mongo], selector: Bson): bool {.discardable.} =
-  ## Delete documents from MongoDB
+proc remove*(c: Collection[Mongo], selector: Bson, multiple=true): bool {.discardable.} =
+  ## Delete document[s] from MongoDB
   {.locks: [c.client.requestLock].}:
     let
       sdoc = selector.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
 
-    return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
+    return c.client.sock.trySend(msgHeader & buildMessageDelete(if multiple: 0 else: 1, $c) & sdoc)
 
-proc remove*(c: Collection[AsyncMongo], selector: Bson): Future[bool] {.async.} =
+proc remove*(c: Collection[AsyncMongo], selector: Bson, multiple=true): Future[bool] {.async.} =
+  ## Delete document[s] from MongoDB via asyn connection
   {.locks: [c.client.requestLock].}:
     let
       sdoc = selector.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
     try:
-      await c.client.sock.send(msgHeader & buildMessageDelete(0, $c) & sdoc)
+      await c.client.sock.send(msgHeader & buildMessageDelete(if multiple: 0 else: 1, $c) & sdoc)
     except OSError:
       return false
     return true
@@ -362,38 +363,38 @@ proc prepareQuery(f: Cursor, numberToReturn: int32): string =
   return msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
 
 iterator performFind(f: Cursor[Mongo], numberToReturn: int32): Bson {.closure.} =
-    ## Private procedure for performing actual query to Mongo
-    {.locks: [f.collection.client.requestLock].}:
-      if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn)):
-        var data: string = newStringOfCap(4)
-        var received: int = f.collection.client.sock.recv(data, 4)
-        var stream: Stream = newStringStream(data)
+  ## Private procedure for performing actual query to Mongo
+  {.locks: [f.collection.client.requestLock].}:
+    if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn)):
+      var data: string = newStringOfCap(4)
+      var received: int = f.collection.client.sock.recv(data, 4)
+      var stream: Stream = newStringStream(data)
 
-        ## Read data
-        let messageLength: int32 = stream.readInt32()
+      ## Read data
+      let messageLength: int32 = stream.readInt32()
 
-        data = newStringOfCap(messageLength - 4)
-        received = f.collection.client.sock.recv(data, messageLength - 4)
-        stream = newStringStream(data)
+      data = newStringOfCap(messageLength - 4)
+      received = f.collection.client.sock.recv(data, messageLength - 4)
+      stream = newStringStream(data)
 
-        let requestID: int32 = stream.readInt32()
-        let responseTo: int32 = stream.readInt32()
-        let opCode: OperationKind = stream.readInt32().OperationKind
-        let responseFlags: int32 = stream.readInt32()
-        let cursorID: int64 = stream.readInt64()
-        let startingFrom: int32 = stream.readInt32()
-        let numberReturned: int32 = stream.readInt32()
+      let requestID: int32 = stream.readInt32()
+      let responseTo: int32 = stream.readInt32()
+      let opCode: OperationKind = stream.readInt32().OperationKind
+      let responseFlags: int32 = stream.readInt32()
+      let cursorID: int64 = stream.readInt64()
+      let startingFrom: int32 = stream.readInt32()
+      let numberReturned: int32 = stream.readInt32()
 
-        if numberReturned > 0:
-          for i in 0..<numberReturned:
-            let docSize = stream.readInt32()
-            stream.setPosition(stream.getPosition() - 4)
-            let sdoc: string = stream.readStr(docSize)
-            yield initBsonDocument(sdoc)
-        elif numberToReturn == 1:
-          raise newException(NotFound, "No documents matching query were found")
-        else:
-          discard
+      if numberReturned > 0:
+        for i in 0..<numberReturned:
+          let docSize = stream.readInt32()
+          stream.setPosition(stream.getPosition() - 4)
+          let sdoc: string = stream.readStr(docSize)
+          yield initBsonDocument(sdoc)
+      elif numberToReturn == 1:
+        raise newException(NotFound, "No documents matching query were found")
+      else:
+        discard
 
 proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32): Future[seq[Bson]] {.async.} =
   ## Private procedure for performing actual query to Mongo via async client
@@ -431,11 +432,15 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32): Future[seq[
     elif numberToReturn == 1:
       raise newException(NotFound, "No documents matching query were found")
 
-proc all*(f: Cursor): seq[Bson] =
-    ## Perform MongoDB query and return all matching documents
-    result = @[]
-    for doc in f.performFind(0):
-        result.add(doc)
+proc all*(f: Cursor[Mongo]): seq[Bson] =
+  ## Perform MongoDB query and return all matching documents
+  result = @[]
+  for doc in f.performFind(0):
+    result.add(doc)
+
+proc all*(f: Cursor[AsyncMongo]): Future[seq[Bson]] {.async.} =
+  ## Perform MongoDB query asynchronously and return all matching documents.
+  result = await f.performFindAsync(0)
 
 proc one*(f: Cursor[Mongo]): Bson =
     ## Perform MongoDB query and return first matching document

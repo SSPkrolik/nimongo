@@ -82,19 +82,30 @@ suite "Mongo client test suite":
   test "[ASYNC] [SYNC] Remove single document":
     let doc = B("string", "hello")
     check(sco.insert(doc) == true)
-    check(sco.remove(doc) == true)
+    check(sco.remove(doc, multiple=false) == true)
     check(waitFor(aco.insert(doc)) == true)
-    check(waitFor(aco.remove(doc)) == true)
+    check(waitFor(aco.remove(doc, multiple=false)) == true)
+
+  test "[ASYNC] [SYNC] Remove multiple documents":
+    check(sco.insert(@[B("string", "value"), B("string", "value")]) == true)
+    check(sco.remove(B("string", "value"), multiple=true))
+    check(sco.find(B("string", "value")).all().len() == 0)
+
+    check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
+    check(waitFor(aco.remove(B("string", "value"), multiple=true)) == true)
+    check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
   test "[     ] [SYNC] Query single document":
     let myId = genOid()
     check(sco.insert(B("string", "somedoc")("myid", myId)))
     check(sco.find(B("myid", myId)).one()["myid"] == myId)
 
-  test "[     ] [SYNC] Query multiple documents as a sequence":
-    check(sco.insert(B("string", "hello")))
-    check(sco.insert(B("string", "hello")))
-    check(sco.find(B("string", "hello")).all().len() == 2)
+  test "[ASYNC] [SYNC] Query multiple documents as a sequence":
+    check(sco.insert(@[B("string", "value"), B("string", "value")]) == true)
+    check(sco.find(B("string", "value")).all().len() == 2)
+
+    check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
+    check(waitFor(aco.find(B("string", "value")).all()).len() == 2)
 
   test "[     ] [SYNC] Query multiple documents as iterator":
     check(sco.insert(B("string", "hello")))
