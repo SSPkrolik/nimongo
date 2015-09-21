@@ -269,7 +269,7 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], continueOnError: b
       return false
     return true
 
-proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
+proc remove*(c: Collection[Mongo], selector: Bson): bool {.discardable.} =
   ## Delete documents from MongoDB
   {.locks: [c.client.requestLock].}:
     let
@@ -278,26 +278,25 @@ proc remove*(c: Collection, selector: Bson): bool {.discardable.} =
 
     return c.client.sock.trySend(msgHeader & buildMessageDelete(0, $c) & sdoc)
 
-proc asyncRemove*(c: Collection, selector: Bson): Future[bool] {.async.} =
+proc remove*(c: Collection[AsyncMongo], selector: Bson): Future[bool] {.async.} =
   {.locks: [c.client.requestLock].}:
     let
       sdoc = selector.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
     try:
-      await c.client.asock.send(msgHeader & buildMessageDelete(0, $c) & sdoc)
+      await c.client.sock.send(msgHeader & buildMessageDelete(0, $c) & sdoc)
     except OSError:
       return false
     return true
 
-proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} =
-    ## Update MongoDB document[s]
-    {.locks: [c.client.requestLock].}:
-        let
-            ssel = selector.bytes()
-            supd = update.bytes()
-            msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
-
-        return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
+proc update*(c: Collection[Mongo], selector: Bson, update: Bson): bool {.discardable.} =
+  ## Update MongoDB document[s]
+  {.locks: [c.client.requestLock].}:
+    let
+      ssel = selector.bytes()
+      supd = update.bytes()
+      msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
+    return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
 proc find*[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
   ## Create lazy query object to MongoDB that can be actually run
