@@ -99,10 +99,13 @@ suite "Mongo client test suite":
     check(waitFor(aco.remove(B("string", "value"), RemoveMultiple)) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
-  test "[     ] [SYNC] Query single document":
+  test "[ASYNC] [SYNC] Query single document":
     let myId = genOid()
     check(sco.insert(B("string", "somedoc")("myid", myId)))
     check(sco.find(B("myid", myId)).one()["myid"] == myId)
+
+    check(waitFor(aco.insert(B("string", "somedoc")("myid", myId))) == true)
+    check(waitFor(aco.find(B("myid", myId)).one())["myid"] == myId)
 
   test "[ASYNC] [SYNC] Query multiple documents as a sequence":
     check(sco.insert(@[B("string", "value"), B("string", "value")]) == true)
