@@ -65,16 +65,16 @@ type
   AsyncMongo* = ref object of MongoBase ## Mongo async client object
     sock:      AsyncSocket
 
-  Database*[T:Mongo|AsyncMongo] = ref object of MongoBase   ## MongoDB database object
+  Database*[T] = ref object of MongoBase   ## MongoDB database object
     name:   string
     client: T
 
-  Collection*[T:Mongo|AsyncMongo] = ref object of MongoBase ## MongoDB collection object
+  Collection*[T] = ref object of MongoBase ## MongoDB collection object
     name:   string
     db:     Database[T]
     client: T
 
-  Cursor*[T:Mongo|AsyncMongo] = ref object     ## MongoDB cursor: manages queries object lazily
+  Cursor*[T] = ref object     ## MongoDB cursor: manages queries object lazily
     collection: Collection[T]
     query:      Bson
     fields:     seq[string]
