@@ -89,7 +89,7 @@ proc nextRequestId(m: Mongo): int32 =
     m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
     return m.requestId
 
-proc newCursor(c: Collection): Cursor =
+proc newCursor[T](c: Collection[T]): Cursor[T] =
     ## Private constructor for the Find object. Find acts by taking
     ## client settings (flags) that can be overriden when actual
     ## query is performed.
@@ -207,9 +207,9 @@ proc `$`*(db: Database): string =
     ## Database name string representation
     return db.name
 
-proc `[]`*(db: Database, collectionName: string): Collection =
+proc `[]`*[T:Mongo|AsyncMongo](db: Database[T], collectionName: string): Collection[T] =
     ## Retrieves collection from Mongo Database
-    result.new
+    result.new()
     result.name = collectionName
     result.client = db.client
     result.db = db
@@ -299,12 +299,12 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
 
         return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
-proc find*(c: Collection, query: Bson, fields: seq[string] = @[]): Cursor =
-    ## Create lazy query object to MongoDB that can be actually run
-    ## by one of the Find object procedures: `one()` or `all()`.
-    result = c.newCursor()
-    result.query = query
-    result.fields = fields
+proc find*[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
+  ## Create lazy query object to MongoDB that can be actually run
+  ## by one of the Find object procedures: `one()` or `all()`.
+  result = c.newCursor()
+  result.query = query
+  result.fields = fields
 
 # === Find API === #
 
@@ -362,7 +362,7 @@ proc prepareQuery(f: Cursor, numberToReturn: int32): string =
 
   return msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
 
-iterator performFind(f: Cursor, numberToReturn: int32): Bson {.closure.} =
+iterator performFind(f: Cursor[Mongo], numberToReturn: int32): Bson {.closure.} =
     ## Private procedure for performing actual query to Mongo
     {.locks: [f.collection.client.requestLock].}:
       if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn)):
@@ -413,20 +413,29 @@ proc asyncOne(f: Cursor): Future[Bson] {.async.} =
   let res = await asyncPerformFind(f, 1)
   return res[0]
 
-proc one*(f: Cursor): Bson =
+proc one*(f: Cursor[Mongo]): Bson =
     ## Perform MongoDB query and return first matching document
     var iter = performFind
     return f.iter(1)
+
+proc one*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
+  ## Perform MongoDB query asynchronously and return first matching document.
+  return initBsonDocument()
 
 iterator items*(f: Cursor): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
     for doc in f.performFind(0):
         yield doc
 
-proc isMaster*(m: Mongo): bool =
-    ## Perform query in order to check if connected Mongo instance is a master
-    let db: Database[Mongo] = m["admin"]
-    return db["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
+proc isMaster*(sm: Mongo): bool =
+  ## Perform query in order to check if connected Mongo instance is a master
+  return sm["admin"]["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
+
+proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
+  ## Perform query in order to check if ocnnected Mongo instance is a master
+  ## via async connection.
+  let response = await am["admin"]["$cmd"].find(B("isMaster", 1)).one()
+  return response["ismaster"]
 
 proc asyncDrop*(c: Collection): Future[bool] {.async.} =
   ## Drop collection from database via async clinet
@@ -445,7 +454,7 @@ proc count*(c: Collection): int =
     elif x.kind == BsonKindDouble:
         return x.toFloat64.int
 
-proc count*(f: Find): int =
+proc count*(f: Cursor): int =
     ## Return number of documents in find query result
     let x = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
     if x.kind == BsonKindInt32:
