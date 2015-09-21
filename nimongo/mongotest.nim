@@ -47,6 +47,11 @@ suite "Mongo client test suite":
     require(sm.connect() == true)
     require(waitFor(am.connect()) == true)
 
+    # Collections must not exist before tests in the suite
+    discard sm[TestDB][TestSyncCol].drop()
+    discard waitFor(am[TestDB][TestAsyncCol].drop())
+
+
   test "[ASYNC] [SYNC] Mongo object `$` operator":
     check($sm == "mongodb://127.0.0.1:27017")
     check($am == "mongodb://127.0.0.1:27017")
@@ -76,6 +81,9 @@ suite "Mongo client test suite":
     let
       selector = B("integer", 100'i32)
       updater  = B("$set", B("integer", 200'i32))
+
+    check(sco.insert(selector) == true)
+    check(waitFor(aco.insert(selector)) == true)
 
     check(sco.update(selector, updater) == true)
     check(waitFor(aco.update(selector, updater)) == true)

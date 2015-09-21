@@ -173,16 +173,16 @@ This table represents MongoDB features and their implementation status within
 |            | Update single   | :white_check_mark: | :white_check_mark: |
 |            | Update multiple | :red_circle:       | :red_circle:       |
 |            | Upsert          | :red_circle:       | :red_circle:       |
-| Querying   |                 | __1__ / __6__      | __1__ / __6__      |
+| Querying   |                 | __3__ / __7__      | __2__ / __7__      |
 |            | Find one        | :white_check_mark: | :white_check_mark: |
-|            | Find all        | :warning:          | :red_circle:       |
-|            | Find iterator   | :warning:          | :red_circle:       |
+|            | Find all        | :white_check_mark: | :white_check_mark: |
+|            | Find iterator   | :white_check_mark: | :red_circle:       |
 |            | Skip            | :warning:          | :red_circle:       |
 |            | Limit           | :warning:          | :red_circle:       |
 |            | Tailable        | :warning:          | :red_circle:       |
 |            | Partial         | :warning:          | :red_circle:       |
-|Collections |                 | __1__:__0__/__1__  | __0__:__0__/__1__  |
-|            | Drop collection | :white_check_mark: | :red_circle:       |
+|Collections |                 | __1__ / __1__      | __1__ / __1__      |
+|            | Drop collection | :white_check_mark: | :white_check_mark: |
 |Admin Commands|               | __1__:__0__/__1__  | __0__:__0__/__1__  |
 |            | isMaster        | :white_check_mark: | :red_circle:       |
 | Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
