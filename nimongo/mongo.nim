@@ -17,7 +17,7 @@ import json
 
 import bson
 
-type OperationKind = enum      ## Type of operation performed by MongoDB
+type OperationKind = enum    ## Type of operation performed by MongoDB
   OP_REPLY        =    1'i32 ##
   # OP_MSG        = 1000'i32 ## Deprecated.
   OP_UPDATE       = 2001'i32 ##
@@ -27,6 +27,10 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
   OP_GET_MORE     = 2005'i32 ##
   OP_DELETE       = 2006'i32 ## Remove documents from MongoDB
   OP_KILL_CURSORS = 2007'i32 ##
+
+type RemoveKind* = enum ## Type of remove operation
+  RemoveSingle          ## Remove single document
+  RemoveMultiple        ## Remove multiple documents
 
 type ClientKind* = enum
   ClientKindBase  = 0
@@ -269,23 +273,23 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], continueOnError: b
       return false
     return true
 
-proc remove*(c: Collection[Mongo], selector: Bson, multiple=true): bool {.discardable.} =
+proc remove*(c: Collection[Mongo], selector: Bson, mode: RemoveKind): bool {.discardable.} =
   ## Delete document[s] from MongoDB
   {.locks: [c.client.requestLock].}:
     let
       sdoc = selector.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
 
-    return c.client.sock.trySend(msgHeader & buildMessageDelete(if multiple: 0 else: 1, $c) & sdoc)
+    return c.client.sock.trySend(msgHeader & buildMessageDelete(if mode == RemoveMultiple: 0 else: 1, $c) & sdoc)
 
-proc remove*(c: Collection[AsyncMongo], selector: Bson, multiple=true): Future[bool] {.async.} =
+proc remove*(c: Collection[AsyncMongo], selector: Bson, mode: RemoveKind): Future[bool] {.async.} =
   ## Delete document[s] from MongoDB via asyn connection
   {.locks: [c.client.requestLock].}:
     let
       sdoc = selector.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
     try:
-      await c.client.sock.send(msgHeader & buildMessageDelete(if multiple: 0 else: 1, $c) & sdoc)
+      await c.client.sock.send(msgHeader & buildMessageDelete(if mode == RemoveMultiple: 0 else: 1, $c) & sdoc)
     except OSError:
       return false
     return true

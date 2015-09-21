@@ -56,8 +56,11 @@ collection.insert(doc)
 ## Update [single] document
 collection.update(B("name", "John"), B("$set", B("surname", "Smith")))
 
-## Delete document
-collection.remove(B("name", "John"))
+## Delete multiple documents
+collection.remove(B("name", "John"), RemoveMultiple)
+
+## Delete single document
+collection.remove(B("name", "John"), RemoveSingle)
 
 ## Fetch one document from DB returning only one field: "name".
 let fetched = collection.find(B("name", "John"), @["name"]).one()
@@ -106,7 +109,10 @@ let
 waitFor(m.insert(@[doc1, doc2]))
 
 ## Removing single document from MongoDB
-waitFor(m.remove(B("doc1", 15)))
+waitFor(m.remove(B("doc1", 15), RemoveSingle))
+
+## Removing multiple documents from MongoDB
+waitFor(m.remove(B("doc1", 15), RemoveMultiple))
 ```
 
 Currently Supported Features

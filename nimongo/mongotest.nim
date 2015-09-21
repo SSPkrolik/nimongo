@@ -82,17 +82,17 @@ suite "Mongo client test suite":
   test "[ASYNC] [SYNC] Remove single document":
     let doc = B("string", "hello")
     check(sco.insert(doc) == true)
-    check(sco.remove(doc, multiple=false) == true)
+    check(sco.remove(doc, RemoveSingle) == true)
     check(waitFor(aco.insert(doc)) == true)
-    check(waitFor(aco.remove(doc, multiple=false)) == true)
+    check(waitFor(aco.remove(doc, RemoveSingle)) == true)
 
   test "[ASYNC] [SYNC] Remove multiple documents":
     check(sco.insert(@[B("string", "value"), B("string", "value")]) == true)
-    check(sco.remove(B("string", "value"), multiple=true))
+    check(sco.remove(B("string", "value"), RemoveMultiple))
     check(sco.find(B("string", "value")).all().len() == 0)
 
     check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
-    check(waitFor(aco.remove(B("string", "value"), multiple=true)) == true)
+    check(waitFor(aco.remove(B("string", "value"), RemoveMultiple)) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
   test "[     ] [SYNC] Query single document":
