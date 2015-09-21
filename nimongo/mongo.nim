@@ -197,7 +197,7 @@ proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     result.name = dbName
     result.client = client
 
-proc `$`*(m: Mongo): string =
+method `$`*(m: MongoBase): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
 
@@ -220,7 +220,7 @@ proc `$`*(c: Collection): string =
     ## String representation of collection name
     return c.db.name & "." & c.name
 
-proc insert*(c: Collection, document: Bson): bool {.discardable.} =
+proc insert*(c: Collection[Mongo], document: Bson): bool {.discardable.} =
   ## Insert new document into MongoDB
   {.locks: [c.client.requestLock].}:
     let
@@ -229,7 +229,7 @@ proc insert*(c: Collection, document: Bson): bool {.discardable.} =
 
     return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
-proc insert*(c: Collection, document: Bson): Future[bool] {.async.} =
+proc insert*(c: Collection[AsyncMongo], document: Bson): Future[bool] {.async.} =
   ## Insert new document into MongoDB via async connection
   {.locks: [c.client.requestLock].}:
     let
@@ -241,7 +241,7 @@ proc insert*(c: Collection, document: Bson): Future[bool] {.async.} =
       return false
     return true
 
-proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
+proc insert*(c: Collection[Mongo], documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
     ## Insert several new documents into MongoDB using one request
     assert len(documents) > 0
 
@@ -253,7 +253,7 @@ proc insert*(c: Collection, documents: seq[Bson], continueOnError: bool = false)
       let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
       return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
 
-proc asyncInsert*(c: Collection, documents: seq[Bson], continueOnError: bool = false): Future[bool] {.async.} =
+proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], continueOnError: bool = false): Future[bool] {.async.} =
   ## Insert new document into MongoDB via async connection
   assert len(documents) > 0
 
@@ -264,7 +264,7 @@ proc asyncInsert*(c: Collection, documents: seq[Bson], continueOnError: bool = f
   {.locks: [c.client.requestLock].}:
     let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
     try:
-      await c.client.asock.send(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
+      await c.client.sock.send(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
     except OSError:
       return false
     return true

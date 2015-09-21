@@ -6,9 +6,9 @@ import bson
 import mongo
 
 const
-  TestDB       = "test-db"
-  TestSyncCol  = "test-sync"
-  TestAsyncCol = "test-async"
+  TestDB       = "testdb"
+  TestSyncCol  = "sync"
+  TestAsyncCol = "async"
 
 suite "Mongo instance administration commands test suite":
 
@@ -32,74 +32,86 @@ suite "Mongo instance administration commands test suite":
     m = waitFor(am.isMaster())
     check(m == true or m == false)
 
-discard """
-
 suite "Mongo client test suite":
 
-    setup:
-        var
-            m: Mongo = newMongo()
-        let
-            db: Database = m["db"]
-            c: Collection = db["collection"]
+  setup:
+    var
+        sm: Mongo = newMongo()           ## Mongo synchronous client
+        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
+    let
+        sdb: Database[Mongo] = sm[TestDB]
+        adb: Database[AsyncMongo] = am[TestDB]
+        sco: Collection[Mongo] = sdb[TestSyncCol]
+        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
 
-        require(m.connect() == true)
+    require(sm.connect() == true)
+    require(waitFor(am.connect()) == true)
 
-    test "[ sync] Mongo object `$` operator":
-        check($m == "mongodb://127.0.0.1:27017")
+  test "[ASYNC] [SYNC] Mongo object `$` operator":
+    check($sm == "mongodb://127.0.0.1:27017")
+    check($am == "mongodb://127.0.0.1:27017")
 
-    test "[ sync] Taking database":
-        check($db == "db")
+  test "[ASYNC] [SYNC] Taking database":
+    check($sdb == "testdb")
+    check($adb == "testdb")
 
-    test "[ sync] Taking collection":
-        check($c == "db.collection")
+  test "[ASYNC] [SYNC] Taking collection":
+    check($sco == "testdb.sync")
+    check($aco == "testdb.async")
 
-    test "[ sync] Inserting single document":
-        check(c.insert(B("double", 3.1415)) == true)
+  test "[ASYNC] [SYNC] Inserting single document":
+    check(sco.insert(B("double", 3.1415)) == true)
+    check(waitFor(aco.insert(B("double", 3.1415))) == true)
 
-    test "[ sync] Inserting multiple documents":
-        let
-            doc1 = B("integer", 100'i32)
-            doc2 = B("string", "hello")("subdoc", B("name", "John"))
-            doc3 = B("array", @["element1", "element2", "element3"])
-        check(c.insert(@[doc1, doc2, doc3]) == true)
+  test "[ASYNC] [SYNC] Inserting multiple documents":
+    let
+      doc1 = B("integer", 100'i32)
+      doc2 = B("string", "hello")("subdoc", B("name", "John"))
+      doc3 = B("array", @["element1", "element2", "element3"])
 
-    test "[ sync] Update single document":
-        let
-            selector = B("integer", 100'i32)
-            updater  = B("$set", B("integer", 200))
+    check(sco.insert(@[doc1, doc2, doc3]) == true)
+    check(waitFor(aco.insert(@[doc1, doc2, doc3])) == true)
 
-        check(c.update(selector, updater) == true)
+  discard """
+  test "[ sync] Update single document":
+      let
+          selector = B("integer", 100'i32)
+          updater  = B("$set", B("integer", 200))
 
-    test "[ sync] Remove document":
-        let
-            doc = B("string", "hello")
-        check(c.remove(doc) == true)
+      check(c.update(selector, updater) == true)
 
-    test "[ sync] Query single document":
-        let myId = genOid()
-        let doc = B("string", "somedoc")("myid", myId)
+  test "[ sync] Remove document":
+      let
+          doc = B("string", "hello")
+      check(c.remove(doc) == true)
 
-        check(c.insert(doc))
+  test "[ sync] Query single document":
+      let myId = genOid()
+      let doc = B("string", "somedoc")("myid", myId)
 
-        let res = c.find(B("myid", myId)).one()
-        let myIdFromDb: Oid = res["myid"]
-        check(myIdFromDb == myId)
+      check(c.insert(doc))
 
-    test "[ sync] Query multiple documents as a sequence":
-        let doc = B("string", "hello")
-        check(c.insert(doc))
-        check(c.insert(doc))
-        let docs = c.find(B("string", "hello")).all()
-        check(docs.len() > 1)
+      let res = c.find(B("myid", myId)).one()
+      let myIdFromDb: Oid = res["myid"]
+      check(myIdFromDb == myId)
 
-    test "[ sync] Query multiple documents as iterator":
-        let doc = B("string", "hello")
-        check(c.insert(doc))
-        check(c.insert(doc))
-        let request = c.find(B("string", "hello"))
-        for document in request.items():
-            check(document["string"] == "hello")
+  test "[ sync] Query multiple documents as a sequence":
+      let doc = B("string", "hello")
+      check(c.insert(doc))
+      check(c.insert(doc))
+      let docs = c.find(B("string", "hello")).all()
+      check(docs.len() > 1)
+
+  test "[ sync] Query multiple documents as iterator":
+      let doc = B("string", "hello")
+      check(c.insert(doc))
+      check(c.insert(doc))
+      let request = c.find(B("string", "hello"))
+      for document in request.items():
+          check(document["string"] == "hello")
+  """
+
+discard """
 
 suite "Mongo async client test suite":
 
