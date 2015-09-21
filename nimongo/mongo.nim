@@ -32,6 +32,10 @@ type RemoveKind* = enum ## Type of remove operation
   RemoveSingle          ## Remove single document
   RemoveMultiple        ## Remove multiple documents
 
+type UpdateKind* = enum ## Type of update operation
+  UpdateSingle          ## Update single document
+  UpdateMultiple        ## Update multiple document
+
 type ClientKind* = enum
   ClientKindBase  = 0
   ClientKindSync  = 1
