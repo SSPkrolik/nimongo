@@ -5,6 +5,28 @@ import unittest
 import bson
 import mongo
 
+suite "Mongo instance administration commands test suite":
+
+  setup:
+    # Mongo clients
+    var
+      sm: Mongo = newMongo()
+      am: Mongo = newAsyncMongo()
+
+    # Connection is required for running tests
+    require(sm.connect() == true)
+    require(waitFor(am.asyncConnect()) == true)
+
+    # Collections for test must be empty
+    require(sm["db"]["sync"].drop() == true)
+    require(waitFor(am["db"]["async"].asyncDrop()) == true)
+
+  test "Command: 'isMaster()'":
+    let ismasters = sm.isMaster()
+    check(ismasters == true or ismasters == false)
+    let ismastera = waitFor(am.asyncIsMaster())
+    check(ismastera == true or ismastera == false)
+
 suite "Mongo client test suite":
 
     setup:

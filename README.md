@@ -191,5 +191,6 @@ This table represents MongoDB features and their implementation status within
 |            | Aggregate       | :red_circle:       | :red_circle:       |
 | Map/Reduce |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
 |            | MapReduce       | :red_circle:       | :red_circle:       |
+| Auditing   |logApplicationMessage|:red_circle:    | :red_circle:       |
 
 __P.S.__ Contribution is welcomed :)

@@ -11,6 +11,7 @@ import sockets
 import streams
 import strutils
 import tables
+import typetraits
 import unsigned
 import json
 
@@ -28,8 +29,9 @@ type OperationKind = enum      ## Type of operation performed by MongoDB
   OP_KILL_CURSORS = 2007'i32 ##
 
 type ClientKind* = enum
-  ClientKindSync  = 0
-  ClientKindAsync = 1
+  ClientKindBase  = 0
+  ClientKindSync  = 1
+  ClientKindAsync = 2
 
 const
   TailableCursor  = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
@@ -50,29 +52,30 @@ converter toInt32*(ok: OperationKind): int32 =
   return ok.int32
 
 type
-  Mongo* = ref object of RootObj       ## Mongo client object
+  MongoBase* = ref object of RootObj    ## Base Mongo client
     requestId:   int32
     requestLock: Lock
     host:        string
     port:        uint16
     queryFlags:  int32
-    case kind:   ClientKind
-    of ClientKindSync:
-      sock:      Socket
-    of ClientKindAsync:
-      asock:     AsyncSocket
 
-  Database* = ref object ## MongoDB database object
+  Mongo* = ref object of MongoBase      ## Mongo client object
+    sock:      Socket
+
+  AsyncMongo* = ref object of MongoBase ## Mongo async client object
+    sock:      AsyncSocket
+
+  Database*[T:Mongo|AsyncMongo] = ref object of MongoBase   ## MongoDB database object
     name:   string
-    client: Mongo
+    client: T
 
-  Collection* = ref object ## MongoDB collection object
+  Collection*[T:Mongo|AsyncMongo] = ref object of MongoBase ## MongoDB collection object
     name:   string
-    db:     Database
-    client: Mongo
+    db:     Database[T]
+    client: T
 
-  Find* = ref object ## MongoDB configurable query object (lazy find)
-    collection: Collection
+  Cursor*[T:Mongo|AsyncMongo] = ref object     ## MongoDB cursor: manages queries object lazily
+    collection: Collection[T]
     query:      Bson
     fields:     seq[string]
     queryFlags: int32
@@ -86,7 +89,7 @@ proc nextRequestId(m: Mongo): int32 =
     m.requestId = (m.requestId + 1) mod (int32.high - 1'i32)
     return m.requestId
 
-proc newFind(c: Collection): Find =
+proc newCursor(c: Collection): Cursor =
     ## Private constructor for the Find object. Find acts by taking
     ## client settings (flags) that can be overriden when actual
     ## query is performed.
@@ -124,18 +127,20 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
-    result.kind = ClientKindSync
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
 
-proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
+proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
     ## Mongo asynchrnonous client constructor
     result.new
     result.host = host
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
-    result.kind = ClientKindAsync
-    result.asock = newAsyncSocket()
+    result.sock = newAsyncSocket()
+
+method kind*(mb: MongoBase): ClientKind = ClientKindBase   ## Base Mongo client
+method kind*(sm: Mongo): ClientKind = ClientKindSync       ## Sync Mongo client
+method kind*(am: AsyncMongo): ClientKind = ClientKindAsync ## Async Mongo client
 
 proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
@@ -178,18 +183,19 @@ proc connect*(m: Mongo): bool =
         return false
     return true
 
-proc asyncConnect*(m: Mongo): Future[bool] {.async.} =
-    try:
-        await m.asock.connect(m.host, asyncdispatch.Port(m.port))
-    except OSError:
-        return false
-    return true
+proc connect*(am: AsyncMongo): Future[bool] {.async.} =
+  ## Establish asynchronous connection with Mongo server
+  try:
+    await am.sock.connect(am.host, asyncdispatch.Port(am.port))
+  except OSError:
+    return false
+  return true
 
-proc `[]`*(m: Mongo, dbName: string): Database =
+proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     ## Retrieves database from Mongo
-    result.new
+    result.new()
     result.name = dbName
-    result.client = m
+    result.client = client
 
 proc `$`*(m: Mongo): string =
     ## Return full DSN for the Mongo connection
@@ -223,14 +229,14 @@ proc insert*(c: Collection, document: Bson): bool {.discardable.} =
 
     return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
 
-proc asyncInsert*(c: Collection, document: Bson): Future[bool] {.async.} =
+proc insert*(c: Collection, document: Bson): Future[bool] {.async.} =
   ## Insert new document into MongoDB via async connection
   {.locks: [c.client.requestLock].}:
     let
       sdoc = document.bytes()
       msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
     try:
-      await c.client.asock.send(msgHeader & buildMessageInsert(0, $c) & sdoc)
+      await AsyncSocket(c.client.sock).send(msgHeader & buildMessageInsert(0, $c) & sdoc)
     except OSError:
       return false
     return true
@@ -293,120 +299,139 @@ proc update*(c: Collection, selector: Bson, update: Bson): bool {.discardable.} 
 
         return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
 
-proc find*(c: Collection, query: Bson, fields: seq[string] = @[]): Find =
+proc find*(c: Collection, query: Bson, fields: seq[string] = @[]): Cursor =
     ## Create lazy query object to MongoDB that can be actually run
     ## by one of the Find object procedures: `one()` or `all()`.
-    result = c.newFind()
+    result = c.newCursor()
     result.query = query
     result.fields = fields
 
 # === Find API === #
 
-proc tailableCursor*(f: Find, enable: bool = true): Find {.discardable.} =
+proc tailableCursor*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     ## Enable/disable tailable behaviour for the cursor (cursor is not
     ## removed immediately after the query)
     result = f
     f.queryFlags = if enable: f.queryFlags or TailableCursor else: f.queryFlags and (not TailableCursor)
 
-proc slaveOk*(f: Find, enable: bool = true): Find {.discardable.} =
+proc slaveOk*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     ## Enable/disable querying from slaves in replica sets
     result = f
     f.queryFlags = if enable: f.queryFlags or SlaveOk else: f.queryFlags and (not SlaveOk)
 
-proc noCursorTimeout*(f: Find, enable: bool = true): Find {.discardable.} =
+proc noCursorTimeout*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     ## Enable/disable cursor idle timeout
     result = f
     f.queryFlags = if enable: f.queryFlags or NoCursorTimeout else: f.queryFlags and (not NoCursorTimeout)
 
-proc awaitData*(f: Find, enable: bool = true): Find {.discardable.} =
+proc awaitData*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     ## Enable/disable data waiting behaviour (along with tailable cursor)
     result = f
     f.queryFlags = if enable: f.queryFlags or AwaitData else: f.queryFlags and (not AwaitData)
 
-proc exhaust*(f: Find, enable: bool = true): Find {.discardable.} =
+proc exhaust*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     ## Enable/disabel exhaust flag which forces database to giveaway
     ## all data for the query in form of "get more" packages.
     result = f
     f.queryFlags = if enable: f.queryFlags or Exhaust else: f.queryFlags and (not Exhaust)
 
-proc allowPartial*(f: Find, enable: bool = true): Find {.discardable.} =
+proc allowPartial*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     ## Enable/disable allowance for partial data retrieval from mongo when
     ## on or more shards are down.
     result = f
     f.queryFlags = if enable: f.queryFlags or Partial else: f.queryFlags and (not Partial)
 
-proc skip*(f: Find, numDocuments: int): Find {.discardable.} =
+proc skip*(f: Cursor, numDocuments: int): Cursor {.discardable.} =
     ## Specify number of documents from return sequence to skip
     result = f
 
-proc limit*(f: Find, numLimit: int): Find {.discardable.} =
+proc limit*(f: Cursor, numLimit: int): Cursor {.discardable.} =
     ## Specify number of documents to return from database
     result = f
 
-iterator performFind(f: Find, numberToReturn: int32): Bson {.closure.} =
+proc prepareQuery(f: Cursor, numberToReturn: int32): string =
+  ## Prepare query and request queries for makind OP_QUERY
+  var bfields: Bson = initBsonDocument()
+  if f.fields.len() > 0:
+      for field in f.fields.items():
+          bfields = bfields(field, 1'i32)
+  let
+      squery = f.query.bytes()
+      sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
+      msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
+
+  return msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
+
+iterator performFind(f: Cursor, numberToReturn: int32): Bson {.closure.} =
     ## Private procedure for performing actual query to Mongo
     {.locks: [f.collection.client.requestLock].}:
-        var bfields: Bson = initBsonDocument()
-        if f.fields.len() > 0:
-            for field in f.fields.items():
-                bfields = bfields(field, 1'i32)
-        let
-            squery = f.query.bytes()
-            sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
-            msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
+      if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn)):
+        var data: string = newStringOfCap(4)
+        var received: int = f.collection.client.sock.recv(data, 4)
+        var stream: Stream = newStringStream(data)
 
-        let dataToSend = msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
+        ## Read data
+        let messageLength: int32 = stream.readInt32()
 
-        if f.collection.client.sock.trySend(dataToSend):
-            var data: string = newStringOfCap(4)
-            var received: int = f.collection.client.sock.recv(data, 4)
-            var stream: Stream = newStringStream(data)
+        data = newStringOfCap(messageLength - 4)
+        received = f.collection.client.sock.recv(data, messageLength - 4)
+        stream = newStringStream(data)
 
-            ## Read data
-            let messageLength: int32 = stream.readInt32()
+        let requestID: int32 = stream.readInt32()
+        let responseTo: int32 = stream.readInt32()
+        let opCode: OperationKind = stream.readInt32().OperationKind
+        let responseFlags: int32 = stream.readInt32()
+        let cursorID: int64 = stream.readInt64()
+        let startingFrom: int32 = stream.readInt32()
+        let numberReturned: int32 = stream.readInt32()
 
-            data = newStringOfCap(messageLength - 4)
-            received = f.collection.client.sock.recv(data, messageLength - 4)
-            stream = newStringStream(data)
+        if numberReturned > 0:
+          for i in 0..<numberReturned:
+            let docSize = stream.readInt32()
+            stream.setPosition(stream.getPosition() - 4)
+            let sdoc: string = stream.readStr(docSize)
+            yield initBsonDocument(sdoc)
+        elif numberToReturn == 1:
+          raise newException(NotFound, "No documents matching query were found")
+        else:
+          discard
 
-            let requestID: int32 = stream.readInt32()
-            let responseTo: int32 = stream.readInt32()
-            let opCode: OperationKind = stream.readInt32().OperationKind
-            let responseFlags: int32 = stream.readInt32()
-            let cursorID: int64 = stream.readInt64()
-            let startingFrom: int32 = stream.readInt32()
-            let numberReturned: int32 = stream.readInt32()
+proc asyncPerformFind(f: Cursor, numberToReturn: int32): Future[seq[Bson]] {.async.} =
+  ## Private procedure for performing actual query to Mongo via async client
+  {.locks: [f.collection.client.requestLock].}:
+    await f.collection.client.asock.send(prepareQuery(f, numberToReturn))
+    return @[initBsonDocument()]
 
-            if numberReturned > 0:
-                for i in 0..<numberReturned:
-                    let docSize = stream.readInt32()
-                    stream.setPosition(stream.getPosition() - 4)
-                    let sdoc: string = stream.readStr(docSize)
-                    yield initBsonDocument(sdoc)
-            elif numberToReturn == 1:
-                raise newException(NotFound, "No documents matching query were found")
-            else:
-                discard
-
-proc all*(f: Find): seq[Bson] =
+proc all*(f: Cursor): seq[Bson] =
     ## Perform MongoDB query and return all matching documents
     result = @[]
     for doc in f.performFind(0):
         result.add(doc)
 
-proc one*(f: Find): Bson =
+proc asyncOne(f: Cursor): Future[Bson] {.async.} =
+  ## Return one document found by making query to Mongo via async client
+  let res = await asyncPerformFind(f, 1)
+  return res[0]
+
+proc one*(f: Cursor): Bson =
     ## Perform MongoDB query and return first matching document
     var iter = performFind
     return f.iter(1)
 
-iterator items*(f: Find): Bson =
+iterator items*(f: Cursor): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
     for doc in f.performFind(0):
         yield doc
 
 proc isMaster*(m: Mongo): bool =
     ## Perform query in order to check if connected Mongo instance is a master
-    return m["admin"]["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
+    let db: Database[Mongo] = m["admin"]
+    return db["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
+
+proc asyncDrop*(c: Collection): Future[bool] {.async.} =
+  ## Drop collection from database via async clinet
+  let res = await c.db["$cmd"].find(B("drop", c.name)).asyncOne()
+  return res["ok"] == 1.0
 
 proc drop*(c: Collection): bool =
   ## Drop collection from database
