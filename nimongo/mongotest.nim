@@ -105,6 +105,17 @@ suite "Mongo client test suite":
     check(sco.find(B("integer", 200)).all().len() == 2)
     check(waitFor(aco.find(B("integer", 200)).all()).len() == 2)
 
+  test "[ASYNC] [SYNC] Upsert":
+    let
+      selector = B("integer", 100'i32)
+      updater  = B("$set", B("integer", 200'i32))
+
+    check(sco.update(selector, updater, UpdateSingle, Upsert) == true)
+    check(waitFor(aco.update(selector, updater, UpdateSingle, Upsert)) == true)
+
+    check(sco.find(B("integer", 200)).all().len() == 1)
+    check(waitFor(aco.find(B("integer", 200)).all()).len() == 1)
+
   test "[ASYNC] [SYNC] Remove single document":
     let doc = B("string", "hello")
     check(sco.insert(doc) == true)
