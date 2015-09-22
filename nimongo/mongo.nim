@@ -157,6 +157,13 @@ proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMong
     result.sock = newAsyncSocket()
     result.replicas = @[]
 
+proc replica*[T:Mongo|AsyncMongo](mb: T, nodes: seq[tuple[host: string, port: uint16]]) =
+  for node in nodes:
+    when T is Mongo:
+      mb.replicas.add((host: node.host, port: sockets.Port(node.port)))
+    when T is AsyncMongo:
+      mb.replicas.add((host: node.host, port: asyncnet.Port(node.port)))
+
 method kind*(mb: MongoBase): ClientKind = ClientKindBase   ## Base Mongo client
 method kind*(sm: Mongo): ClientKind = ClientKindSync       ## Sync Mongo client
 method kind*(am: AsyncMongo): ClientKind = ClientKindAsync ## Async Mongo client
