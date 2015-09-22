@@ -195,13 +195,10 @@ This table represents MongoDB features and their implementation status within
 |            | MONGODB-X509    | :red_circle:       | :red_circle:       |
 |            | GSSAPI (Kerberos)| :red_circle:      | :red_circle:       |
 |            | PLAIN (LDAP SASL)| :red_circle:      | :red_circle:       |
-|Collections |                 | __2__ / __2__      | __2__ / __2__      |
-|            | Count documents | :white_check_mark: | :white_check_mark: |
+|Collections |                 | __1__ / __1__      | __1__ / __1__      |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
 |Admin Commands|               | __1__ / __1__      | __1__ / __1__      |
 |            | isMaster        | :white_check_mark: | :white_check_mark: |
-| Replica    |                 | __0__ / __1__      | __0__ /__1__       |
-|            | Replica Set     | :red_circle:       | :red_circle:       |
 | GridFS     |                 | __0__ / __1__      | __0__ / __1__      |
 |            | GridFS          | :red_circle:       | :red_circle:       |
 | Indices    |                 | __0__ / __4__      | __0__ / __4__      |
@@ -209,10 +206,16 @@ This table represents MongoDB features and their implementation status within
 |            | Drop Index      | :red_circle:       | :red_circle:       |
 |            | Drop Indices    | :red_circle:       | :red_circle:       |
 |            | Ensure Index    | :red_circle:       | :red_circle:       |
-|Aggreagation|                 | __0__ /__1__       | __0__ /__1__       |
-|            | Aggregate       | :red_circle:       | :red_circle:       |
-| Map/Reduce |                 | __0__ /__1__       | __0__ /__1__       |
-|            | MapReduce       | :red_circle:       | :red_circle:       |
+|Aggreagation|                 | __1__ / __5__      | __1__ / __5__      |
+|            | aggregate       | :red_circle:       | :red_circle:       |
+|            | count           | :white_check_mark: | :white_check_mark: |
+|            | distinct        | :red_circle:       | :red_circle:       |
+|            | group           | :red_circle:       | :red_circle:       |
+|            | mapReduce       | :red_circle:       | :red_circle:       |
+| Geospatial |                 | __0__ /__3__       | __0__ / __3__      |
+|            | geoNear         | :red_circle:       | :red_circle:       |
+|            | geoSearch       | :red_circle:       | :red_circle:       |
+|            | geoWalk         | :red_circle:       | :red_circle:       |
 | Auditing   |                 | __0__ / __1__      | __0__ / __1__      |
 |            |logApplicationMessage|:red_circle:    | :red_circle:       |
 
