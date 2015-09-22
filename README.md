@@ -217,6 +217,7 @@ This table represents MongoDB features and their implementation status within
 |Admin Commands|               | __2__ / __2__      | __2__ / __2__      |
 |            | Is Master       | :white_check_mark: | :white_check_mark: |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
+|Diagnostic  |                 | __0__ / __0__      | __0__ / __0__      |
 |GridFS      |                 | __0__ / __1__      | __0__ / __1__      |
 |            | GridFS          | :red_circle:       | :red_circle:       |
 |Indices     |                 | __0__ / __4__      | __0__ / __4__      |
