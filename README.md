@@ -181,23 +181,25 @@ This table represents MongoDB features and their implementation status within
 |            | Limit           | :white_check_mark: | :white_check_mark: |
 |            | Tailable        | :red_circle:       | :red_circle:       |
 |            | Partial         | :red_circle:       | :red_circle:       |
-|Collections |                 | __1__ / __1__      | __1__ / __1__      |
+|Collections |                 | __2__ / __2__      | __2__ / __2__      |
+|            | Count documents | :white_check_mark: | :white_check_mark: |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
 |Admin Commands|               | __1__ / __1__      | __1__ / __1__      |
 |            | isMaster        | :white_check_mark: | :white_check_mark: |
-| Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+| Replica    |                 | __0__ / __1__      | __0__ /__1__       |
 |            | Replica Set     | :red_circle:       | :red_circle:       |
-| GridFS     |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+| GridFS     |                 | __0__ / __1__      | __0__ / __1__      |
 |            | GridFS          | :red_circle:       | :red_circle:       |
-| Indices    |                 | __0__:__0__/__4__  | __0__:__0__/__4__  |
+| Indices    |                 | __0__ / __4__      | __0__ / __4__      |
 |            | Create Index    | :red_circle:       | :red_circle:       |
 |            | Drop Index      | :red_circle:       | :red_circle:       |
 |            | Drop Indices    | :red_circle:       | :red_circle:       |
 |            | Ensure Index    | :red_circle:       | :red_circle:       |
-|Aggreagation|                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+|Aggreagation|                 | __0__ /__1__       | __0__ /__1__       |
 |            | Aggregate       | :red_circle:       | :red_circle:       |
-| Map/Reduce |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
+| Map/Reduce |                 | __0__ /__1__       | __0__ /__1__       |
 |            | MapReduce       | :red_circle:       | :red_circle:       |
-| Auditing   |logApplicationMessage|:red_circle:    | :red_circle:       |
+| Auditing   |                 | __0__ / __1__      | __0__ / __1__      |
+|            |logApplicationMessage|:red_circle:    | :red_circle:       |
 
 __P.S.__ Contribution is welcomed :)
