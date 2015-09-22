@@ -65,11 +65,12 @@ converter toInt32*(ok: OperationKind): int32 =
 
 type
   MongoBase* = ref object of RootObj    ## Base Mongo client
-    requestId:   int32
-    requestLock: Lock
-    host:        string
-    port:        uint16
-    queryFlags:  int32
+    requestId:    int32
+    requestLock:  Lock
+    host:         string
+    port:         uint16
+    queryFlags:   int32
+    replicas:     seq[tuple[host: string, port: uint16]]
 
   Mongo* = ref object of MongoBase      ## Mongo client object
     sock:      Socket
@@ -144,6 +145,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.requestID = 0
     result.queryFlags = 0
     result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
+    result.replicas = @[]
 
 proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
     ## Mongo asynchrnonous client constructor
@@ -153,6 +155,7 @@ proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMong
     result.requestID = 0
     result.queryFlags = 0
     result.sock = newAsyncSocket()
+    result.replicas = @[]
 
 method kind*(mb: MongoBase): ClientKind = ClientKindBase   ## Base Mongo client
 method kind*(sm: Mongo): ClientKind = ClientKindSync       ## Sync Mongo client
