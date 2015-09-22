@@ -82,14 +82,28 @@ suite "Mongo client test suite":
       selector = B("integer", 100'i32)
       updater  = B("$set", B("integer", 200'i32))
 
-    check(sco.insert(selector) == true)
-    check(waitFor(aco.insert(selector)) == true)
+    check(sco.insert(@[selector, selector]) == true)
+    check(waitFor(aco.insert(@[selector, selector])) == true)
 
-    check(sco.update(selector, updater) == true)
-    check(waitFor(aco.update(selector, updater)) == true)
+    check(sco.update(selector, updater, UpdateSingle, NoUpsert) == true)
+    check(waitFor(aco.update(selector, updater, UpdateSingle, NoUpsert)) == true)
 
-    check(sco.find(B("integer", 200)).one()["integer"].toInt32() == 200)
-    check(waitFor(aco.find(B("integer", 200)).one())["integer"].toInt32() == 200)
+    check(sco.find(B("integer", 200)).all().len() == 1)
+    check(waitFor(aco.find(B("integer", 200)).all()).len() == 1)
+
+  test "[ASYNC] [SYNC] Update multiple documents":
+    let
+      selector = B("integer", 100'i32)
+      updater  = B("$set", B("integer", 200'i32))
+
+    check(sco.insert(@[selector, selector]) == true)
+    check(waitFor(aco.insert(@[selector, selector])) == true)
+
+    check(sco.update(selector, updater, UpdateMultiple, NoUpsert) == true)
+    check(waitFor(aco.update(selector, updater, UpdateMultiple, NoUpsert)) == true)
+
+    check(sco.find(B("integer", 200)).all().len() == 2)
+    check(waitFor(aco.find(B("integer", 200)).all()).len() == 2)
 
   test "[ASYNC] [SYNC] Remove single document":
     let doc = B("string", "hello")
@@ -122,7 +136,7 @@ suite "Mongo client test suite":
     check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 2)
 
-  test "[     ] [SYNC] Query multiple documents as iterator":
+  test "[ N/A ] [SYNC] Query multiple documents as iterator":
     check(sco.insert(B("string", "hello")))
     check(sco.insert(B("string", "hello")))
     for document in sco.find(B("string", "hello")).items():

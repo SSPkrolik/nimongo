@@ -36,6 +36,10 @@ type UpdateKind* = enum ## Type of update operation
   UpdateSingle          ## Update single document
   UpdateMultiple        ## Update multiple document
 
+type UpsertKind* = enum ## Indicates if need to make upsert
+  Upsert                ## Upsert allowed
+  NoUpsert              ## Upsert disallowed
+
 type ClientKind* = enum
   ClientKindBase  = 0
   ClientKindSync  = 1
@@ -298,24 +302,38 @@ proc remove*(c: Collection[AsyncMongo], selector: Bson, mode: RemoveKind): Futur
       return false
     return true
 
-proc update*(c: Collection[Mongo], selector: Bson, update: Bson): bool {.discardable.} =
+proc update*(c: Collection[Mongo], selector: Bson, update: Bson, mode: UpdateKind, upsert: UpsertKind): bool {.discardable.} =
   ## Update MongoDB document[s]
   {.locks: [c.client.requestLock].}:
     let
       ssel = selector.bytes()
       supd = update.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
-    return c.client.sock.trySend(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
+    var flags: int32 = 0
 
-proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson): Future[bool] {.async.} =
+    if mode == UpdateMultiple:
+      flags = flags or (1'i32 shl 1)
+    if upsert == Upsert:
+      flags = flags or (1'i32)
+
+    return c.client.sock.trySend(msgHeader & buildMessageUpdate(flags, $c) & ssel & supd)
+
+proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, mode: UpdateKind, upsert: UpsertKind): Future[bool] {.async.} =
   ## Update MongoDB document[s] via async connection
   {.locks: [c.client.requestLock].}:
     let
       ssel = selector.bytes()
       supd = update.bytes()
       msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
+    var flags: int32 = 0
+
+    if mode == UpdateMultiple:
+      flags = flags or (1'i32 shl 1)
+    if upsert == Upsert:
+      flags = flags or (1'i32)
+
     try:
-      await c.client.sock.send(msgHeader & buildMessageUpdate(0, $c) & ssel & supd)
+      await c.client.sock.send(msgHeader & buildMessageUpdate(flags, $c) & ssel & supd)
     except OSError:
       return false
     return true
