@@ -184,7 +184,7 @@ This table represents MongoDB features and their implementation status within
 |Collections |                 | __1__ / __1__      | __1__ / __1__      |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
 |Admin Commands|               | __1__ / __1__      | __1__ / __1__      |
-|            | isMaster        | :white_check_mark: | :red_circle:       |
+|            | isMaster        | :white_check_mark: | :white_check_mark: |
 | Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
 |            | Replica Set     | :red_circle:       | :red_circle:       |
 | GridFS     |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
