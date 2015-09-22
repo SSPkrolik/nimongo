@@ -177,10 +177,10 @@ This table represents MongoDB features and their implementation status within
 |            | Find one        | :white_check_mark: | :white_check_mark: |
 |            | Find all        | :white_check_mark: | :white_check_mark: |
 |            | Find iterator   | :white_check_mark: | __N/A__            |
-|            | Skip            | :warning:          | :red_circle:       |
-|            | Limit           | :warning:          | :red_circle:       |
-|            | Tailable        | :warning:          | :red_circle:       |
-|            | Partial         | :warning:          | :red_circle:       |
+|            | Skip            | :red_circle:       | :red_circle:       |
+|            | Limit           | :red_circle:       | :red_circle:       |
+|            | Tailable        | :red_circle:       | :red_circle:       |
+|            | Partial         | :red_circle:       | :red_circle:       |
 |Collections |                 | __1__ / __1__      | __1__ / __1__      |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
 |Admin Commands|               | __1__ / __1__      | __1__ / __1__      |
