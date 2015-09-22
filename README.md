@@ -183,7 +183,7 @@ This table represents MongoDB features and their implementation status within
 |            | Partial         | :warning:          | :red_circle:       |
 |Collections |                 | __1__ / __1__      | __1__ / __1__      |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
-|Admin Commands|               | __1__:__0__/__1__  | __0__:__0__/__1__  |
+|Admin Commands|               | __1__ / __1__      | __1__ / __1__      |
 |            | isMaster        | :white_check_mark: | :red_circle:       |
 | Replica    |                 | __0__:__0__/__1__  | __0__:__0__/__1__  |
 |            | Replica Set     | :red_circle:       | :red_circle:       |
