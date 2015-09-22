@@ -498,9 +498,9 @@ proc one*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
   return docs[0]
 
 iterator items*(f: Cursor): Bson =
-    ## Perform MongoDB query and return iterator for all matching documents
-    for doc in f.performFind(f.nlimit, f.nskip):
-        yield doc
+  ## Perform MongoDB query and return iterator for all matching documents
+  for doc in f.performFind(f.nlimit, f.nskip):
+      yield doc
 
 proc isMaster*(sm: Mongo): bool =
   ## Perform query in order to check if connected Mongo instance is a master
@@ -525,36 +525,28 @@ proc drop*(c: Collection[AsyncMongo]): Future[tuple[ok: bool, message: string]] 
   return (ok: ok, message: if ok: "" else: response["errmsg"])
 
 
-proc count*(c: Collection): int =
-    ## Return number of documents in collection
-    let x = c.db["$cmd"].find(B("count", c.name)).one()["n"]
-    if x.kind == BsonKindInt32:
-        return x.toInt32()
-    elif x.kind == BsonKindDouble:
-        return x.toFloat64.int
+proc count*(c: Collection[Mongo]): int =
+  ## Return number of documents in collection
+  let x = c.db["$cmd"].find(B("count", c.name)).one()["n"]
+  if x.kind == BsonKindInt32:
+      return x.toInt32()
+  elif x.kind == BsonKindDouble:
+      return x.toFloat64.int
+
+proc count*(c: Collection[AsyncMongo]): Future[int] {.async.} =
+  ## Return number of documents in collection via async client
+  let
+    res = await c.db["$cmd"].find(B("count", c.name)).one()
+    x = res["n"]
+  if x.kind == BsonKindInt32:
+      return x.toInt32()
+  elif x.kind == BsonKindDouble:
+      return x.toFloat64.int
 
 proc count*(f: Cursor): int =
-    ## Return number of documents in find query result
-    let x = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
-    if x.kind == BsonKindInt32:
-        return x.toInt32()
-    elif x.kind == BsonKindDouble:
-        return x.toFloat64().int
-
-when isMainModule:
-    import md5
-
-    let
-      m: Mongo = newMongo()
-      a: Mongo = newAsyncMongo()
-
-    echo("Connecting sync : ", m.connect())
-    echo("Connecting async: ", waitFor(a.asyncConnect()))
-
-    discard waitFor(a["db"]["async"].asyncInsert(B("code", js("function identity(x) {return x;}"))))
-
-    let someid = genOid()
-    echo("Inserting: ", someid, " ", waitFor(a["db"]["async"].asyncInsert(B("_id", someid)("image", bin("asd")))))
-    #echo("Removing: ", someid, " ", waitFor(a["db"]["async"].asyncRemove(B("_id", someid))))
-
-    echo(m["db"]["async"].drop())
+  ## Return number of documents in find query result
+  let x = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
+  if x.kind == BsonKindInt32:
+      return x.toInt32()
+  elif x.kind == BsonKindDouble:
+      return x.toFloat64().int

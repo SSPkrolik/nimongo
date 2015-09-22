@@ -34,6 +34,44 @@ suite "Mongo instance administration commands test suite":
     m = waitFor(am.isMaster())
     check(m == true or m == false)
 
+suite "Mongo collection-level operations":
+
+  echo "\n Mongo collection-level operations\n"
+
+  setup:
+    var
+        sm: Mongo = newMongo()           ## Mongo synchronous client
+        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
+    let
+        sdb: Database[Mongo] = sm[TestDB]
+        adb: Database[AsyncMongo] = am[TestDB]
+        sco: Collection[Mongo] = sdb[TestSyncCol]
+        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
+
+    require(sm.connect() == true)
+    require(waitFor(am.connect()) == true)
+
+    # Collections must not exist before tests in the suite
+    discard sm[TestDB][TestSyncCol].drop()
+    discard waitFor(am[TestDB][TestAsyncCol].drop())
+
+  test "[ASYNC] [SYNC] 'count' documents in collection":
+    for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
+    check(sco.count() == 5)
+
+    for i in 0..<5: check(waitFor(aco.insert(B("iter", i.int32)("label", "l"))))
+    check(waitFor(aco.count()) == 5)
+
+  test "[ASYNC] [SYNC] 'drop' collection":
+    check(sco.insert(B("svalue", "hello")) == true)
+    discard sco.drop()
+    check(sco.find(B("svalue", "hello")).all().len() == 0)
+
+    check(waitFor(aco.insert(B("svalue", "hello"))) == true)
+    discard waitFor(aco.drop())
+    check(waitFor(aco.find(B("svalue", "hello")).all()).len() == 0)
+
+
 suite "Mongo client operations test suite":
 
   echo "\n Mongo client operations \n"
