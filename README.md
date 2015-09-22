@@ -176,7 +176,7 @@ This table represents MongoDB features and their implementation status within
 | Querying   |                 | __3__ / __7__      | __2__ / __6__      |
 |            | Find one        | :white_check_mark: | :white_check_mark: |
 |            | Find all        | :white_check_mark: | :white_check_mark: |
-|            | Find iterator   | :white_check_mark: |                    |
+|            | Find iterator   | :white_check_mark: | __N/A__            |
 |            | Skip            | :warning:          | :red_circle:       |
 |            | Limit           | :warning:          | :red_circle:       |
 |            | Tailable        | :warning:          | :red_circle:       |
