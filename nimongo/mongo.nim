@@ -91,6 +91,8 @@ type
     query:      Bson
     fields:     seq[string]
     queryFlags: int32
+    nskip:       int32
+    nlimit:      int32
 
   NotFound* = object of Exception  ## Raises when querying of one documents returns empty result
 
@@ -109,6 +111,8 @@ proc newCursor[T](c: Collection[T]): Cursor[T] =
     result.collection = c
     result.fields = @[]
     result.queryFlags = c.client.queryFlags
+    result.nskip = 0
+    result.nlimit = 0
 
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
     ## Build Mongo message header as a series of bytes
@@ -380,15 +384,17 @@ proc allowPartial*(f: Cursor, enable: bool = true): Cursor {.discardable.} =
     result = f
     f.queryFlags = if enable: f.queryFlags or Partial else: f.queryFlags and (not Partial)
 
-proc skip*(f: Cursor, numDocuments: int): Cursor {.discardable.} =
+proc skip*[T:Mongo|AsyncMongo](f: Cursor[T], numSkip: int32): Cursor[T] {.discardable.} =
     ## Specify number of documents from return sequence to skip
     result = f
+    result.nskip = numSkip
 
-proc limit*(f: Cursor, numLimit: int): Cursor {.discardable.} =
+proc limit*[T:Mongo|AsyncMongo](f: Cursor[T], numLimit: int32): Cursor[T] {.discardable.} =
     ## Specify number of documents to return from database
     result = f
+    result.nlimit = numLimit
 
-proc prepareQuery(f: Cursor, numberToReturn: int32): string =
+proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string =
   ## Prepare query and request queries for makind OP_QUERY
   var bfields: Bson = initBsonDocument()
   if f.fields.len() > 0:
@@ -399,12 +405,12 @@ proc prepareQuery(f: Cursor, numberToReturn: int32): string =
       sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
       msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
 
-  return msgHeader & buildMessageQuery(0, $(f.collection), 0 , numberToReturn) & squery & sfields
+  return msgHeader & buildMessageQuery(0, $(f.collection), numberToSkip , numberToReturn) & squery & sfields
 
-iterator performFind(f: Cursor[Mongo], numberToReturn: int32): Bson {.closure.} =
+iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int32): Bson {.closure.} =
   ## Private procedure for performing actual query to Mongo
   {.locks: [f.collection.client.requestLock].}:
-    if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn)):
+    if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn, numberToSkip)):
       var data: string = newStringOfCap(4)
       var received: int = f.collection.client.sock.recv(data, 4)
       var stream: Stream = newStringStream(data)
@@ -435,10 +441,10 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32): Bson {.closure.} 
       else:
         discard
 
-proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32): Future[seq[Bson]] {.async.} =
+proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
   ## Private procedure for performing actual query to Mongo via async client
   {.locks: [f.collection.client.requestLock].}:
-    await f.collection.client.sock.send(prepareQuery(f, numberToReturn))
+    await f.collection.client.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
     ## Read Length
     var
       data: string = await f.collection.client.sock.recv(4)
@@ -474,26 +480,26 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32): Future[seq[
 proc all*(f: Cursor[Mongo]): seq[Bson] =
   ## Perform MongoDB query and return all matching documents
   result = @[]
-  for doc in f.performFind(0):
+  for doc in f.performFind(f.nlimit, f.nskip):
     result.add(doc)
 
 proc all*(f: Cursor[AsyncMongo]): Future[seq[Bson]] {.async.} =
   ## Perform MongoDB query asynchronously and return all matching documents.
-  result = await f.performFindAsync(0)
+  result = await f.performFindAsync(f.nlimit, f.nskip)
 
 proc one*(f: Cursor[Mongo]): Bson =
     ## Perform MongoDB query and return first matching document
     var iter = performFind
-    return f.iter(1)
+    return f.iter(1, f.nskip)
 
 proc one*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
   ## Perform MongoDB query asynchronously and return first matching document.
-  let docs = await f.performFindAsync(1)
+  let docs = await f.performFindAsync(1, f.nskip)
   return docs[0]
 
 iterator items*(f: Cursor): Bson =
     ## Perform MongoDB query and return iterator for all matching documents
-    for doc in f.performFind(0):
+    for doc in f.performFind(f.nlimit, f.nskip):
         yield doc
 
 proc isMaster*(sm: Mongo): bool =

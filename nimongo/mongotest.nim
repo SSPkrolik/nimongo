@@ -12,6 +12,8 @@ const
 
 suite "Mongo instance administration commands test suite":
 
+  echo "\n Mongo instance administration commands test suite\n"
+
   setup:
     var
       sm: Mongo = newMongo()           ## Mongo synchronous client
@@ -32,7 +34,9 @@ suite "Mongo instance administration commands test suite":
     m = waitFor(am.isMaster())
     check(m == true or m == false)
 
-suite "Mongo client test suite":
+suite "Mongo client operations test suite":
+
+  echo "\n Mongo client operations \n"
 
   setup:
     var
@@ -50,7 +54,6 @@ suite "Mongo client test suite":
     # Collections must not exist before tests in the suite
     discard sm[TestDB][TestSyncCol].drop()
     discard waitFor(am[TestDB][TestAsyncCol].drop())
-
 
   test "[ASYNC] [SYNC] Mongo object `$` operator":
     check($sm == "mongodb://127.0.0.1:27017")
@@ -132,6 +135,27 @@ suite "Mongo client test suite":
     check(waitFor(aco.remove(B("string", "value"), RemoveMultiple)) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
+suite "Mongo client querying test suite":
+
+  echo "\n Mongo client querying\n"
+
+  setup:
+    var
+        sm: Mongo = newMongo()           ## Mongo synchronous client
+        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
+    let
+        sdb: Database[Mongo] = sm[TestDB]
+        adb: Database[AsyncMongo] = am[TestDB]
+        sco: Collection[Mongo] = sdb[TestSyncCol]
+        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
+
+    require(sm.connect() == true)
+    require(waitFor(am.connect()) == true)
+
+    # Collections must not exist before tests in the suite
+    discard sm[TestDB][TestSyncCol].drop()
+    discard waitFor(am[TestDB][TestAsyncCol].drop())
+
   test "[ASYNC] [SYNC] Query single document":
     let myId = genOid()
     check(sco.insert(B("string", "somedoc")("myid", myId)))
@@ -152,3 +176,19 @@ suite "Mongo client test suite":
     check(sco.insert(B("string", "hello")))
     for document in sco.find(B("string", "hello")).items():
       check(document["string"] == "hello")
+
+  test "[ASYNC] [SYNC] Query multiple documents up to limit":
+    for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
+    check(sco.find(B("label", "l")).limit(3).all().len() == 3)
+
+    for i in 0..<5: check(waitFor(aco.insert(B("iter", i.int32)("label", "l"))))
+    check(waitFor(aco.find(B("label", "l")).limit(3).all()).len() == 3)
+
+  test "[ASYNC] [SYNC] Skip documents":
+    for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
+    check(sco.find(B("label", "l")).skip(3).all().len() == 2)
+
+    for i in 0..<5: check(waitFor(aco.insert(B("iter", i.int32)("label", "l"))))
+    check(waitFor(aco.find(B("label", "l")).skip(3).all()).len() == 2)
+
+echo ""
