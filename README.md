@@ -165,18 +165,18 @@ This table represents MongoDB features and their implementation status within
 
 | Block      | Feature         | Status (sync)      | Status (async)     |
 |-----------:|:----------------|:------------------:|:------------------:|
-| Operations |                 | __5__ / __7__      | __5__ / __7__      |
+| Operations |                 | __6__ / __7__      | __6__ / __7__      |
 |            | Insert          | :white_check_mark: | :white_check_mark: |
 |            | Multiple Insert | :white_check_mark: | :white_check_mark: |
 |            | Remove single   | :white_check_mark: | :white_check_mark: |
 |            | Remove multiple | :white_check_mark: | :white_check_mark: |
 |            | Update single   | :white_check_mark: | :white_check_mark: |
-|            | Update multiple | :red_circle:       | :red_circle:       |
+|            | Update multiple | :white_check_mark: | :white_check_mark: |
 |            | Upsert          | :red_circle:       | :red_circle:       |
-| Querying   |                 | __3__ / __7__      | __2__ / __7__      |
+| Querying   |                 | __3__ / __7__      | __2__ / __6__      |
 |            | Find one        | :white_check_mark: | :white_check_mark: |
 |            | Find all        | :white_check_mark: | :white_check_mark: |
-|            | Find iterator   | :white_check_mark: | :red_circle:       |
+|            | Find iterator   | :white_check_mark: |                    |
 |            | Skip            | :warning:          | :red_circle:       |
 |            | Limit           | :warning:          | :red_circle:       |
 |            | Tailable        | :warning:          | :red_circle:       |
