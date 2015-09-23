@@ -522,6 +522,36 @@ proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
   let response = await am["admin"]["$cmd"].find(B("isMaster", 1)).one()
   return response["ismaster"]
 
+proc listDatabases*(sm: Mongo): seq[string] =
+  ## Return list of databases on the server
+  let response = sm["admin"]["$cmd"].find(B("listDatabases", 1)).one()
+  if response["ok"] == 0.0:
+    return @[]
+  elif response["ok"] == 1.0:
+    result = @[]
+    for db in response["databases"].items():
+      result.add(db["name"].toString())
+  else:
+    raise new(Exception)
+
+proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
+  ## Return list of databases on the server via async client
+  let response = await am["admin"]["$cmd"].find(B("listDatabases", 1)).one()
+  if response["ok"] == 0.0:
+    return @[]
+  elif response["ok"] == 1.0:
+    result = @[]
+    for db in response["databases"].items():
+      result.add(db["name"].toString())
+  else:
+    raise new(Exception)
+
+proc listCollections*(db: Database[Mongo], filter: Bson = initBsonDocument()): seq[string] =
+  ## List collections inside specified database
+  let response = db["$cmd"].find(B("listCollections", 1'i32)).one()
+  if response["ok"] == 0.0:
+    return @[]
+
 proc drop*(db: Database[Mongo]): bool =
   ## Drop database from server
   let response = db["$cmd"].find(B("dropDatabase", 1)).one()

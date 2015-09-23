@@ -425,6 +425,15 @@ proc `[]`*(bs: Bson, key: int): Bson =
     else:
         raise new(Exception)
 
+iterator items*(bs: Bson): Bson =
+  ## Iterate overt Bson document or array fields
+  if bs.kind == BsonKindDocument:
+    for item in bs.valueDocument:
+      yield item
+  elif bs.kind == BsonKindArray:
+    for item in bs.valueArray:
+      yield item
+
 converter seqCharToString(x: openarray[char]): string =
   ## Converts sequence of chars to string
   result = newStringOfCap(len(x))

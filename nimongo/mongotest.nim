@@ -43,6 +43,15 @@ suite "Mongo instance administration commands test suite":
     check(sdb.drop() == true)
     check(waitFor(adb.drop()) == true)
 
+  test "[ASYNC] [SYNC] Command: 'listDatabases'":
+    check("testdb" in sm.listDatabases())
+    check("testdb" in waitFor(am.listDatabases()))
+
+  #test "[ASYNC] [SYNC] Command: 'listCollections'":
+  #  let sclist = sdb.listCollections()
+  #  #check(sclist.len() == 3)
+
+
 suite "Mongo collection-level operations":
 
   echo "\n Mongo collection-level operations\n"
