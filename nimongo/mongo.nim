@@ -522,6 +522,16 @@ proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
   let response = await am["admin"]["$cmd"].find(B("isMaster", 1)).one()
   return response["ismaster"]
 
+proc drop*(db: Database[Mongo]): bool =
+  ## Drop database from server
+  let response = db["$cmd"].find(B("dropDatabase", 1)).one()
+  return response["ok"] == 1.0
+
+proc drop*(db: Database[AsyncMongo]): Future[bool] {.async.} =
+  ## Drop database from server via async connection
+  let response = await db["$cmd"].find(B("dropDatabase", 1)).one()
+  return response["ok"] == 1.0
+
 proc drop*(c: Collection[Mongo]): tuple[ok: bool, message: string] =
   ## Drop collection from database
   let response = c.db["$cmd"].find(B("drop", c.name)).one()

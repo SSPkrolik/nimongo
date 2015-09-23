@@ -212,11 +212,12 @@ This table represents MongoDB features and their implementation status within
 |            | Revoke roles    | :red_circle:       | :red_circle:       |
 |            | Users info      | :red_circle:       | :red_circle:       |
 |Role Management |             | __0__ / __0__      | __0__ / __0__      |
-|Replication |                 | __0__ / __0__      | __0__ / __0__      |
-|Sharding    |                 | __0__ / __0__      | __0__ / __0__      |
-|Admin Commands|               | __2__ / __2__      | __2__ / __2__      |
+|Replication |                 | __1__ / __1__      | __1__ / __1__      |
 |            | Is Master       | :white_check_mark: | :white_check_mark: |
+|Sharding    |                 | __0__ / __0__      | __0__ / __0__      |
+|Admin Commands|               | __1__ / __2__      | __1__ / __2__      |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
+|            | Drop database   | :red_circle:       | :red_circle:       |
 |Diagnostic  |                 | __0__ / __0__      | __0__ / __0__      |
 |GridFS      |                 | __0__ / __1__      | __0__ / __1__      |
 |            | GridFS          | :red_circle:       | :red_circle:       |

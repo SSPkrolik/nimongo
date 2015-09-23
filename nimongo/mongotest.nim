@@ -18,14 +18,19 @@ suite "Mongo instance administration commands test suite":
     var
       sm: Mongo = newMongo()           ## Mongo synchronous client
       am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
+    let
+      sdb: Database[Mongo] = sm[TestDB]
+      adb: Database[AsyncMongo] = am[TestDB]
+      sco: Collection[Mongo] = sdb[TestSyncCol]
+      aco: Collection[AsyncMongo] = adb[TestAsyncCol]
 
     # Connection is required for running tests
     require(sm.connect() == true)
     require(waitFor(am.connect()) == true)
 
     # Collections must not exist before tests in the suite
-    discard sm[TestDB][TestSyncCol].drop()
-    discard waitFor(am[TestDB][TestAsyncCol].drop())
+    discard sco.drop()
+    discard waitFor(aco.drop())
 
   test "[ASYNC] [SYNC] Command: 'isMaster'":
     var m: bool
@@ -33,6 +38,10 @@ suite "Mongo instance administration commands test suite":
     check(m == true or m == false)
     m = waitFor(am.isMaster())
     check(m == true or m == false)
+
+  test "[ASYNC] [SYNC] Command: 'dropDatabase'":
+    check(sdb.drop() == true)
+    check(waitFor(adb.drop()) == true)
 
 suite "Mongo collection-level operations":
 
