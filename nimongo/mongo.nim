@@ -91,7 +91,7 @@ type
     nskip:       int32
     nlimit:      int32
 
-  NotFound* = object of Exception  ## Raises when querying of one documents returns empty result
+  NotFound* = object of Exception   ## Raises when querying of one documents returns empty result
 
 # === Private APIs === #
 

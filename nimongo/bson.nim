@@ -98,6 +98,7 @@ type
     of BsonKindMinimumKey:       discard
     else:                        discard
 
+  GeoPoint = array[0..1, float64]   ## Represents Mongo Geo Point
 
 converter toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
@@ -382,6 +383,14 @@ proc js*(code: string): Bson =
 proc bin*(bindata: string): Bson =
   ## Create new binary Bson object with 'generic' subtype
   return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeGeneric, valueGeneric: bindata)
+
+proc geo*(loc: GeoPoint): Bson =
+  ## Convert array of two floats into Bson as MongoDB Geo-Point.
+  return Bson(
+    key: "",
+    kind: BsonKindArray,
+    valueArray: @[loc[0].toBson(), loc[1].toBson()]
+  )
 
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
