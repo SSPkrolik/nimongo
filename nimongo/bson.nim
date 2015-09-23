@@ -163,7 +163,7 @@ converter toBson*(x: MD5Digest): Bson =
   ## Convert MD5Digest to Bson object
   return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
 
-converter toBson(x: var MD5Context): Bson =
+converter toBson*(x: var MD5Context): Bson =
   ## Convert MD5Context to Bson object (still digest from current context).
   ## :WARNING: MD5Context is finalized during conversion.
   var digest: MD5Digest
@@ -441,9 +441,8 @@ converter seqCharToString(x: openarray[char]): string =
 
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte stream
-    let
-        stream: Stream = newStringStream(bytes)
-        docSize: int32 = stream.readInt32()
+    let stream: Stream = newStringStream(bytes)
+    discard stream.readInt32()   ## docSize
     var document: Bson = initBsonDocument()
 
     let parseBson = proc(s: Stream, doc: Bson): Bson =

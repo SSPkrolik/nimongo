@@ -5,28 +5,25 @@ when hostOs == "linux":
 import asyncdispatch
 import asyncnet
 import locks
+import net
 import oids
 import sequtils
-import sockets
 import streams
 import strutils
 import tables
 import typetraits
-import unsigned
 import json
 
 import bson
 
 type OperationKind = enum    ## Type of operation performed by MongoDB
-  OP_REPLY        =    1'i32 ##
-  # OP_MSG        = 1000'i32 ## Deprecated.
-  OP_UPDATE       = 2001'i32 ##
-  OP_INSERT       = 2002'i32 ## Insert new document into MongoDB
-  # RESERVED      = 2003'i32 ## Reserved by MongoDB developers
-  OP_QUERY        = 2004'i32 ##
-  OP_GET_MORE     = 2005'i32 ##
-  OP_DELETE       = 2006'i32 ## Remove documents from MongoDB
-  OP_KILL_CURSORS = 2007'i32 ##
+  # OP_REPLY        =    1'i32 ##
+  OP_UPDATE         = 2001'i32 ##
+  OP_INSERT         = 2002'i32 ## Insert new document into MongoDB
+  OP_QUERY          = 2004'i32 ##
+  # OP_GET_MORE     = 2005'i32 ##
+  OP_DELETE         = 2006'i32 ## Remove documents from MongoDB
+  # OP_KILL_CURSORS = 2007'i32 ##
 
 type RemoveKind* = enum ## Type of remove operation
   RemoveSingle          ## Remove single document
@@ -53,11 +50,10 @@ const
   Exhaust         = 1'i32 shl 6 ##
   Partial         = 1'i32 shl 7 ## Get info only from running shards
 
-const
-  CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
-  QueryFailure       = 1'i32 shl 1 ## $err field document is returned
-  # ShardConfigState = 1'i32 shl 2 ## (used by mongos)
-  AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
+##  const
+##    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
+##    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
+##    AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
 
 converter toInt32*(ok: OperationKind): int32 =
   ## Convert OperationKind ot int32
@@ -144,7 +140,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
-    result.sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, true)
+    result.sock = newSocket()
     result.replicas = @[]
 
 proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
@@ -164,7 +160,7 @@ proc replica*[T:Mongo|AsyncMongo](mb: T, nodes: seq[tuple[host: string, port: ui
     when T is AsyncMongo:
       mb.replicas.add((host: node.host, port: asyncnet.Port(node.port)))
 
-method kind*(mb: MongoBase): ClientKind = ClientKindBase   ## Base Mongo client
+method kind*(mb: MongoBase): ClientKind {.base.} = ClientKindBase   ## Base Mongo client
 method kind*(sm: Mongo): ClientKind = ClientKindSync       ## Sync Mongo client
 method kind*(am: AsyncMongo): ClientKind = ClientKindAsync ## Async Mongo client
 
@@ -204,7 +200,7 @@ proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
 proc connect*(m: Mongo): bool =
     ## Connect socket to mongo server
     try:
-        m.sock.connect(m.host, sockets.Port(m.port), -1)
+        m.sock.connect(m.host, net.Port(m.port), -1)
     except OSError:
         return false
     return true
@@ -223,7 +219,7 @@ proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     result.name = dbName
     result.client = client
 
-method `$`*(m: MongoBase): string =
+method `$`*(m: MongoBase): string {.base.} =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
 
@@ -262,7 +258,7 @@ proc insert*(c: Collection[AsyncMongo], document: Bson): Future[bool] {.async.} 
       sdoc = document.bytes()
       msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
     try:
-      await AsyncSocket(c.client.sock).send(msgHeader & buildMessageInsert(0, $c) & sdoc)
+      await c.client.sock.send(msgHeader & buildMessageInsert(0, $c) & sdoc)
     except OSError:
       return false
     return true
@@ -432,13 +428,13 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
       received = f.collection.client.sock.recv(data, messageLength - 4)
       stream = newStringStream(data)
 
-      let requestID: int32 = stream.readInt32()
-      let responseTo: int32 = stream.readInt32()
-      let opCode: OperationKind = stream.readInt32().OperationKind
-      let responseFlags: int32 = stream.readInt32()
-      let cursorID: int64 = stream.readInt64()
-      let startingFrom: int32 = stream.readInt32()
-      let numberReturned: int32 = stream.readInt32()
+      discard stream.readInt32()                     ## requestId
+      discard stream.readInt32()                     ## responseTo
+      discard stream.readInt32()                     ## opCode
+      discard stream.readInt32()                     ## responseFlags
+      discard stream.readInt64()                     ## cursorID
+      discard stream.readInt32()                     ## startingFrom
+      let numberReturned: int32 = stream.readInt32() ## numberReturned
 
       if numberReturned > 0:
         for i in 0..<numberReturned:
@@ -467,13 +463,13 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
 
     stream = newStringStream(data)
 
-    let requestID: int32 = stream.readInt32()
-    let responseTo: int32 = stream.readInt32()
-    let opCode: OperationKind = stream.readInt32().OperationKind
-    let responseFlags: int32 = stream.readInt32()
-    let cursorID: int64 = stream.readInt64()
-    let startingFrom: int32 = stream.readInt32()
-    let numberReturned: int32 = stream.readInt32()
+    discard stream.readInt32()                     ## requestId
+    discard stream.readInt32()                     ## responseTo
+    discard stream.readInt32()                     ## opCode
+    discard stream.readInt32()                     ## responseFlags
+    discard stream.readInt64()                     ## cursorID
+    discard stream.readInt32()                     ## startingFrom
+    let numberReturned: int32 = stream.readInt32() ## numberReturned
 
     result = @[]
 
