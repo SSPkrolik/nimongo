@@ -215,9 +215,9 @@ This table represents MongoDB features and their implementation status within
 |Replication |                 | __1__ / __1__      | __1__ / __1__      |
 |            | Is Master       | :white_check_mark: | :white_check_mark: |
 |Sharding    |                 | __0__ / __0__      | __0__ / __0__      |
-|Admin Commands|               | __1__ / __2__      | __1__ / __2__      |
+|Admin Commands|               | __2__ / __2__      | __2__ / __2__      |
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
-|            | Drop database   | :red_circle:       | :red_circle:       |
+|            | Drop database   | :white_check_mark: | :white_check_mark: |
 |Diagnostic  |                 | __0__ / __0__      | __0__ / __0__      |
 |GridFS      |                 | __0__ / __1__      | __0__ / __1__      |
 |            | GridFS          | :red_circle:       | :red_circle:       |
