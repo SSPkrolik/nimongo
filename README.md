@@ -219,8 +219,7 @@ This table represents MongoDB features and their implementation status within
 |            | Drop collection | :white_check_mark: | :white_check_mark: |
 |            | Drop database   | :white_check_mark: | :white_check_mark: |
 |Diagnostic  |                 | __0__ / __0__      | __0__ / __0__      |
-|GridFS      |                 | __0__ / __1__      | __0__ / __1__      |
-|            | GridFS          | :red_circle:       | :red_circle:       |
+|GridFS      |                 | __0__ / __0__      | __0__ / __0__      |
 |Indices     |                 | __0__ / __4__      | __0__ / __4__      |
 |            | Create Index    | :red_circle:       | :red_circle:       |
 |            | Drop Index      | :red_circle:       | :red_circle:       |
