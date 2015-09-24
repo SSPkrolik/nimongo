@@ -181,12 +181,13 @@ This table represents MongoDB features and their implementation status within
 |            | Update single   | :white_check_mark: | :white_check_mark: |
 |            | Update multiple | :white_check_mark: | :white_check_mark: |
 |            | Upsert          | :white_check_mark: | :white_check_mark: |
-|Querying    |                 | __5__ / __9__      | __4__ / __8__      |
+|Querying    |                 | __6__ / __10__     | __5__ / __9__      |
 |            | Find one        | :white_check_mark: | :white_check_mark: |
 |            | Find all        | :white_check_mark: | :white_check_mark: |
 |            | Find iterator   | :white_check_mark: | __N/A__            |
 |            | Skip            | :white_check_mark: | :white_check_mark: |
 |            | Limit           | :white_check_mark: | :white_check_mark: |
+|            | Count           | :white_check_mark: | :white_check_mark: |
 |            | Tailable        | :red_circle:       | :red_circle:       |
 |            | Partial         | :red_circle:       | :red_circle:       |
 |            | FindAndModify   | :red_circle:       | :red_circle:       |
