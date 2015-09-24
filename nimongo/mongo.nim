@@ -570,14 +570,13 @@ proc drop*(c: Collection[AsyncMongo]): Future[tuple[ok: bool, message: string]] 
   let ok = response["ok"] == 1.0
   return (ok: ok, message: if ok: "" else: response["errmsg"])
 
-
 proc count*(c: Collection[Mongo]): int =
   ## Return number of documents in collection
   let x = c.db["$cmd"].find(B("count", c.name)).one()["n"]
   if x.kind == BsonKindInt32:
-      return x.toInt32()
+    return x.toInt32()
   elif x.kind == BsonKindDouble:
-      return x.toFloat64.int
+    return x.toFloat64.int
 
 proc count*(c: Collection[AsyncMongo]): Future[int] {.async.} =
   ## Return number of documents in collection via async client
@@ -585,14 +584,24 @@ proc count*(c: Collection[AsyncMongo]): Future[int] {.async.} =
     res = await c.db["$cmd"].find(B("count", c.name)).one()
     x = res["n"]
   if x.kind == BsonKindInt32:
-      return x.toInt32()
+    return x.toInt32()
   elif x.kind == BsonKindDouble:
-      return x.toFloat64.int
+    return x.toFloat64.int
 
-proc count*(f: Cursor): int =
+proc count*(f: Cursor[Mongo]): int =
   ## Return number of documents in find query result
   let x = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
   if x.kind == BsonKindInt32:
-      return x.toInt32()
+    return x.toInt32()
   elif x.kind == BsonKindDouble:
-      return x.toFloat64().int
+    return x.toFloat64().int
+
+proc count*(f: Cursor[AsyncMongo]): Future[int] {.async.} =
+  ## Return number of document in find query result via async connection
+  let
+    response = await f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()
+    x = response["n"]
+  if x.kind == BsonKindInt32:
+    return x.toInt32()
+  elif x.kind == BsonKindDouble:
+    return x.toFloat64().int

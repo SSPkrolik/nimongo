@@ -191,6 +191,13 @@ suite "Mongo client operations test suite":
     check(waitFor(aco.remove(B("string", "value"), RemoveMultiple)) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
+  test "[ASYNC] [SYNC] Count documents in query result":
+    sco.insert(@[B("string", "value"), B("string", "value")])
+    check(sco.find(B("string", "value")).count() == 2)
+
+    check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
+    check(waitFor(aco.find(B("string", "value")).count()) == 2)
+
 suite "Mongo client querying test suite":
 
   echo "\n Mongo client querying\n"
