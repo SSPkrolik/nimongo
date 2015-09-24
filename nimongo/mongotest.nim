@@ -191,12 +191,40 @@ suite "Mongo client operations test suite":
     check(waitFor(aco.remove(B("string", "value"), RemoveMultiple)) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
+suite "Mongo aggregation commands":
+
+  echo "\n Mongo aggregation commands\n"
+
+  setup:
+    var
+        sm: Mongo = newMongo()           ## Mongo synchronous client
+        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
+    let
+        sdb: Database[Mongo] = sm[TestDB]
+        adb: Database[AsyncMongo] = am[TestDB]
+        sco: Collection[Mongo] = sdb[TestSyncCol]
+        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
+
+    require(sm.connect() == true)
+    require(waitFor(am.connect()) == true)
+
+    # Collections must not exist before tests in the suite
+    discard sm[TestDB][TestSyncCol].drop()
+    discard waitFor(am[TestDB][TestAsyncCol].drop())
+
   test "[ASYNC] [SYNC] Count documents in query result":
     sco.insert(@[B("string", "value"), B("string", "value")])
     check(sco.find(B("string", "value")).count() == 2)
 
     check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
     check(waitFor(aco.find(B("string", "value")).count()) == 2)
+
+  test "[ASYNC] [SYNC] Query distinct values by field in collection documents":
+    sco.insert(@[B("string", "value")("int", 1), B("string", "value")("double", 2.0)])
+    check(sco.find(B("string", "value")).unique("string") == @["value"])
+
+    check(waitFor(aco.insert(@[B("string", "value")("int", 1), B("string", "value")("double", 2.0)])) == true)
+    check(waitFor(aco.find(B("string", "value")).unique("string")) == @["value"])
 
 suite "Mongo client querying test suite":
 

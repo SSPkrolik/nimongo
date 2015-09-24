@@ -605,3 +605,26 @@ proc count*(f: Cursor[AsyncMongo]): Future[int] {.async.} =
     return x.toInt32()
   elif x.kind == BsonKindDouble:
     return x.toFloat64().int
+
+proc unique*(f: Cursor[Mongo], key: string): seq[string] =
+  ## Force cursor to return only distinct documents by specified field.
+  ## Corresponds to '.distinct()' MongoDB command. If Nim we use 'unique'
+  ## because 'distinct' is Nim's reserved keyword.
+  let x = f.collection.db["$cmd"].find(B("distinct", f.collection.name)("query", f.query)("key", key)).one()
+  result = @[]
+  if x["ok"] == 1.0:
+    for item in x["values"].items():
+      result.add(item.toString())
+
+proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} =
+  ## Force cursor to return only distinct documents by specified field.
+  ## Corresponds to '.distinct()' MongoDB command. If Nim we use 'unique'
+  ## because 'distinct' is Nim's reserved keyword.
+  let
+    response = await f.collection.db["$cmd"].find(B("distinct", f.collection.name)("query", f.query)("key", key)).one()
+    ok = response["ok"]
+    va = response["values"]
+  result = @[]
+  if ok == 1.0:
+    for item in va.items():
+      result.add(item.toString())
