@@ -279,13 +279,13 @@ proc `$`*(bs: Bson): string =
             return res
         of BsonKindArray:
             var res: string = ""
-            res = res & "\"" & bs.key & "\": ["
+            res = res & "\"" & bs.key & "\": {"
             ident = ident & "  "
             for i, item in bs.valueArray:
                 if i == len(bs.valueArray) - 1: res = res & stringify(item)
                 else: res = res & stringify(item) & ", "
             ident = ident[0..len(ident) - 3]
-            res = res & "]"
+            res = res & "}"
             return res
         of BsonKindBinary:
             case bs.subtype
