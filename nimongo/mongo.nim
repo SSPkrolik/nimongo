@@ -219,7 +219,7 @@ proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     result.name = dbName
     result.client = client
 
-method `$`*(m: MongoBase): string {.base.} =
+proc `$`*[T:Mongo|AsyncMongo](m: T): string =
     ## Return full DSN for the Mongo connection
     return "mongodb://$#:$#" % [m.host, $m.port]
 
