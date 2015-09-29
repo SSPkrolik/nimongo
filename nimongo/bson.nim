@@ -418,6 +418,15 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
 
     result.valueDocument.add(arr)
 
+proc add*[T](bs: Bson, values: seq[T]): Bson =
+  result = bs
+
+  var counter = 0
+  for val in values.items():
+    var tmpVal: Bson = val
+    tmpVal.key = $counter
+    result.valueArray.add(tmpVal)
+
 proc `[]`*(bs: Bson, key: string): Bson =
     ## Get Bson document field
     if bs.kind == BsonKindDocument:
