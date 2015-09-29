@@ -418,14 +418,11 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
 
     result.valueDocument.add(arr)
 
-proc add*[T](bs: Bson, values: seq[T]): Bson =
+proc add*[T](bs: Bson, value: T): Bson =
   result = bs
-
-  var counter = 0
-  for val in values.items():
-    var tmpVal: Bson = val
-    tmpVal.key = $counter
-    result.valueArray.add(tmpVal)
+  var val: Bson = value
+  val.key = $len(bs.valueArray)
+  result.valueArray.add(val)
 
 proc `[]`*(bs: Bson, key: string): Bson =
     ## Get Bson document field
@@ -567,3 +564,8 @@ when isMainModule:
     let bbytes = bdoc.bytes()
     let recovered = initBsonDocument(bbytes)
     echo "RECOVERED: ", recovered
+
+    var bdoc2 = initBsonArray()
+    bdoc2 = bdoc2.add(2)
+    bdoc2 = bdoc2.add(2)
+    echo bdoc2
