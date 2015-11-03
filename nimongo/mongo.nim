@@ -68,11 +68,16 @@ type
     queryFlags:   int32
     replicas:     seq[tuple[host: string, port: uint16]]
 
+  AsyncLockedSocket = object
+    inuse: bool
+    sock:  AsyncSocket
+
   Mongo* = ref object of MongoBase      ## Mongo client object
     sock:      Socket
 
   AsyncMongo* = ref object of MongoBase ## Mongo async client object
-    sock:      AsyncSocket
+    current: int                     ## Current (possibly) free socket to use
+    pool:    seq[AsyncLockedSocket]  ## Pool of connections
 
   Database*[T] = ref object of MongoBase   ## MongoDB database object
     name:   string
@@ -143,15 +148,34 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
     result.sock = newSocket()
     result.replicas = @[]
 
-proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017): AsyncMongo =
+proc newAsyncLockedSocket(): AsyncLockedSocket =
+  ## Constructor for "locked" async socket
+  return AsyncLockedSocket(
+    inuse: false,
+    sock: newAsyncSocket()
+  )
+
+proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017, maxConnections=32): AsyncMongo =
     ## Mongo asynchrnonous client constructor
     result.new
     result.host = host
     result.port = port
     result.requestID = 0
     result.queryFlags = 0
-    result.sock = newAsyncSocket()
+    result.pool = @[]
+    for i in 0..<maxConnections:
+      result.pool.add(newAsyncLockedSocket())
+    result.current = -1
     result.replicas = @[]
+
+proc next(am: AsyncMongo): Future[AsyncLockedSocket] {.async.} =
+  ## Retrieves next non-in-use async socket for request
+  while true:
+    for _ in 0..<am.pool.len():
+      am.current = (am.current + 1) mod am.pool.len()
+      if not am.pool[am.current].inuse:
+        return am.pool[am.current]
+    await sleepAsync(1)
 
 proc replica*[T:Mongo|AsyncMongo](mb: T, nodes: seq[tuple[host: string, port: uint16]]) =
   for node in nodes:
@@ -207,10 +231,11 @@ proc connect*(m: Mongo): bool =
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
-  try:
-    await am.sock.connect(am.host, asyncdispatch.Port(am.port))
-  except OSError:
-    return false
+  for ls in am.pool.items():
+    try:
+      await ls.sock.connect(am.host, asyncdispatch.Port(am.port))
+    except OSError:
+      continue
   return true
 
 proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
@@ -253,15 +278,17 @@ proc insert*(c: Collection[Mongo], document: Bson): bool {.discardable.} =
 
 proc insert*(c: Collection[AsyncMongo], document: Bson): Future[bool] {.async.} =
   ## Insert new document into MongoDB via async connection
-  {.locks: [c.client.requestLock].}:
-    let
-      sdoc = document.bytes()
-      msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
-    try:
-      await c.client.sock.send(msgHeader & buildMessageInsert(0, $c) & sdoc)
-    except OSError:
-      return false
-    return true
+  let
+    sdoc = document.bytes()
+    msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
+  var ls: AsyncLockedSocket = await c.client.next()
+  try:
+    ls.inuse = true
+    await ls.sock.send(msgHeader & buildMessageInsert(0, $c) & sdoc)
+    ls.inuse = false
+  except OSError:
+    return false
+  return true
 
 proc insert*(c: Collection[Mongo], documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
     ## Insert several new documents into MongoDB using one request
