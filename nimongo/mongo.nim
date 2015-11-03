@@ -155,7 +155,7 @@ proc newAsyncLockedSocket(): AsyncLockedSocket =
     sock: newAsyncSocket()
   )
 
-proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017, maxConnections=32): AsyncMongo =
+proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017, maxConnections=16): AsyncMongo =
     ## Mongo asynchrnonous client constructor
     result.new
     result.host = host

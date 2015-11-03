@@ -1,4 +1,5 @@
 import asyncdispatch
+import nimprof
 import oids
 import unittest
 
@@ -43,8 +44,10 @@ suite "Mongo instance administration commands test suite":
     check(waitFor(adb.drop()) == true)
 
   test "[ASYNC] [SYNC] Command: 'listDatabases'":
+    sco.insert(B("test", "test"))
     check("testdb" in sm.listDatabases())
     check("testdb" in waitFor(am.listDatabases()))
+    sco.remove(B("test", "test"), RemoveSingle)
 
   #test "[ASYNC] [SYNC] Command: 'listCollections'":
   #  let sclist = sdb.listCollections()
@@ -55,9 +58,11 @@ suite "Mongo collection-level operations":
   echo "\n Mongo collection-level operations\n"
 
   setup:
-    discard
+    discard sco.drop()
+    discard waitFor(aco.drop())
 
   test "[ASYNC] [SYNC] 'count' documents in collection":
+
     for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
     check(sco.count() == 5)
 
@@ -79,7 +84,8 @@ suite "Mongo client operations test suite":
   echo "\n Mongo client operations \n"
 
   setup:
-    discard
+    discard sco.drop()
+    discard waitFor(aco.drop())
 
   test "[ASYNC] [SYNC] Mongo object `$` operator":
     check($sm == "mongodb://127.0.0.1:27017")
@@ -166,7 +172,8 @@ suite "Mongo aggregation commands":
   echo "\n Mongo aggregation commands\n"
 
   setup:
-    discard
+    discard sco.drop()
+    discard waitFor(aco.drop())
 
   test "[ASYNC] [SYNC] Count documents in query result":
     sco.insert(@[B("string", "value"), B("string", "value")])
@@ -187,7 +194,8 @@ suite "Mongo client querying test suite":
   echo "\n Mongo client querying\n"
 
   setup:
-    discard
+    discard sco.drop()
+    discard waitFor(aco.drop())
 
   test "[ASYNC] [SYNC] Query single document":
     let myId = genOid()
@@ -211,10 +219,26 @@ suite "Mongo client querying test suite":
       check(document["string"] == "hello")
 
   test "[ASYNC] [SYNC] Query multiple documents up to limit":
-    for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
+    check(sco.insert(
+      @[
+        B("iter", 0.int32)("label", "l"),
+        B("iter", 1.int32)("label", "l"),
+        B("iter", 2.int32)("label", "l"),
+        B("iter", 3.int32)("label", "l"),
+        B("iter", 4.int32)("label", "l")
+      ]
+    ))
     check(sco.find(B("label", "l")).limit(3).all().len() == 3)
 
-    for i in 0..<5: check(waitFor(aco.insert(B("iter", i.int32)("label", "l"))))
+    check(waitFor(aco.insert(
+      @[
+        B("iter", 0.int32)("label", "l"),
+        B("iter", 1.int32)("label", "l"),
+        B("iter", 2.int32)("label", "l"),
+        B("iter", 3.int32)("label", "l"),
+        B("iter", 4.int32)("label", "l"),
+      ]
+    )))
     check(waitFor(aco.find(B("label", "l")).limit(3).all()).len() == 3)
 
   test "[ASYNC] [SYNC] Skip documents":
