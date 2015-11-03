@@ -62,7 +62,6 @@ converter toInt32*(ok: OperationKind): int32 =
 type
   MongoBase* = ref object of RootObj    ## Base Mongo client
     requestId:    int32
-    requestLock:  Lock
     host:         string
     port:         uint16
     queryFlags:   int32
@@ -73,7 +72,8 @@ type
     sock:  AsyncSocket
 
   Mongo* = ref object of MongoBase      ## Mongo client object
-    sock:      Socket
+    requestLock: Lock
+    sock:        Socket
 
   AsyncMongo* = ref object of MongoBase ## Mongo async client object
     current: int                     ## Current (possibly) free socket to use
@@ -291,32 +291,34 @@ proc insert*(c: Collection[AsyncMongo], document: Bson): Future[bool] {.async.} 
   return true
 
 proc insert*(c: Collection[Mongo], documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
-    ## Insert several new documents into MongoDB using one request
-    assert len(documents) > 0
+  ## Insert several new documents into MongoDB using one request
+  assert len(documents) > 0
+  var
+    total = 0
+    sdocs: seq[string] = @[]
+  for d in documents.items(): sdocs.add(bytes(d))
+  for sdoc in sdocs: inc(total, sdoc.len())
 
-    var total = 0
-    let sdocs: seq[string] = mapIt(documents, string, bytes(it))
-    for sdoc in sdocs: inc(total, sdoc.len())
-
-    {.locks: [c.client.requestLock].}:
-      let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
-      return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
+  let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
+  return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
 
 proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], continueOnError: bool = false): Future[bool] {.async.} =
   ## Insert new document into MongoDB via async connection
   assert len(documents) > 0
-
-  var total = 0
+  var
+    total = 0
+    ls = await c.client.next()
   let sdocs: seq[string] = mapIt(documents, string, bytes(it))
   for sdoc in sdocs: inc(total, sdoc.len())
 
-  {.locks: [c.client.requestLock].}:
-    let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
-    try:
-      await c.client.sock.send(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
-    except OSError:
-      return false
-    return true
+  let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
+  try:
+    ls.inuse = true
+    await ls.sock.send(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
+    ls.inuse = false
+  except OSError:
+    return false
+  return true
 
 proc remove*(c: Collection[Mongo], selector: Bson, mode: RemoveKind): bool {.discardable.} =
   ## Delete document[s] from MongoDB
@@ -329,15 +331,17 @@ proc remove*(c: Collection[Mongo], selector: Bson, mode: RemoveKind): bool {.dis
 
 proc remove*(c: Collection[AsyncMongo], selector: Bson, mode: RemoveKind): Future[bool] {.async.} =
   ## Delete document[s] from MongoDB via asyn connection
-  {.locks: [c.client.requestLock].}:
-    let
-      sdoc = selector.bytes()
-      msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
-    try:
-      await c.client.sock.send(msgHeader & buildMessageDelete(if mode == RemoveMultiple: 0 else: 1, $c) & sdoc)
-    except OSError:
-      return false
-    return true
+  var ls = await c.client.next()
+  let
+    sdoc = selector.bytes()
+    msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
+  try:
+    ls.inuse = true
+    await ls.sock.send(msgHeader & buildMessageDelete(if mode == RemoveMultiple: 0 else: 1, $c) & sdoc)
+    ls.inuse = false
+  except OSError:
+    return false
+  return true
 
 proc update*(c: Collection[Mongo], selector: Bson, update: Bson, mode: UpdateKind, upsert: UpsertKind): bool {.discardable.} =
   ## Update MongoDB document[s]
@@ -357,23 +361,25 @@ proc update*(c: Collection[Mongo], selector: Bson, update: Bson, mode: UpdateKin
 
 proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, mode: UpdateKind, upsert: UpsertKind): Future[bool] {.async.} =
   ## Update MongoDB document[s] via async connection
-  {.locks: [c.client.requestLock].}:
-    let
-      ssel = selector.bytes()
-      supd = update.bytes()
-      msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
-    var flags: int32 = 0
+  var ls = await c.client.next()
+  let
+    ssel = selector.bytes()
+    supd = update.bytes()
+    msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
+  var flags: int32 = 0
 
-    if mode == UpdateMultiple:
-      flags = flags or (1'i32 shl 1)
-    if upsert == Upsert:
-      flags = flags or (1'i32)
+  if mode == UpdateMultiple:
+    flags = flags or (1'i32 shl 1)
+  if upsert == Upsert:
+    flags = flags or (1'i32)
 
-    try:
-      await c.client.sock.send(msgHeader & buildMessageUpdate(flags, $c) & ssel & supd)
-    except OSError:
-      return false
-    return true
+  try:
+    ls.inuse = true
+    await ls.sock.send(msgHeader & buildMessageUpdate(flags, $c) & ssel & supd)
+    ls.inuse = false
+  except OSError:
+    return false
+  return true
 
 proc find*[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
   ## Create lazy query object to MongoDB that can be actually run
@@ -476,39 +482,43 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
 
 proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
   ## Private procedure for performing actual query to Mongo via async client
-  {.locks: [f.collection.client.requestLock].}:
-    await f.collection.client.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
-    ## Read Length
-    var
-      data: string = await f.collection.client.sock.recv(4)
-      stream: Stream = newStringStream(data)
-    let messageLength: int32 = stream.readInt32()
+  var ls = await f.collection.client.next()
 
-    ## Read data
-    data = newStringOfCap(messageLength - 4)
-    data = await f.collection.client.sock.recv(messageLength - 4)
+  ls.inuse = true
+  await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
+  ## Read Length
+  var
+    data: string = await ls.sock.recv(4)
+    stream: Stream = newStringStream(data)
+  let messageLength: int32 = stream.readInt32()
 
-    stream = newStringStream(data)
+  ## Read data
+  data = newStringOfCap(messageLength - 4)
+  data = await ls.sock.recv(messageLength - 4)
 
-    discard stream.readInt32()                     ## requestId
-    discard stream.readInt32()                     ## responseTo
-    discard stream.readInt32()                     ## opCode
-    discard stream.readInt32()                     ## responseFlags
-    discard stream.readInt64()                     ## cursorID
-    discard stream.readInt32()                     ## startingFrom
-    let numberReturned: int32 = stream.readInt32() ## numberReturned
+  ls.inuse = false
 
-    result = @[]
+  stream = newStringStream(data)
 
-    if numberReturned > 0:
-      for i in 0..<numberReturned:
-        let docSize = stream.readInt32()
-        stream.setPosition(stream.getPosition() - 4)
-        let sdoc: string = stream.readStr(docSize)
-        result.add(initBsonDocument(sdoc))
-      return
-    elif numberToReturn == 1:
-      raise newException(NotFound, "No documents matching query were found")
+  discard stream.readInt32()                     ## requestId
+  discard stream.readInt32()                     ## responseTo
+  discard stream.readInt32()                     ## opCode
+  discard stream.readInt32()                     ## responseFlags
+  discard stream.readInt64()                     ## cursorID
+  discard stream.readInt32()                     ## startingFrom
+  let numberReturned: int32 = stream.readInt32() ## numberReturned
+
+  result = @[]
+
+  if numberReturned > 0:
+    for i in 0..<numberReturned:
+      let docSize = stream.readInt32()
+      stream.setPosition(stream.getPosition() - 4)
+      let sdoc: string = stream.readStr(docSize)
+      result.add(initBsonDocument(sdoc))
+    return
+  elif numberToReturn == 1:
+    raise newException(NotFound, "No documents matching query were found")
 
 proc all*(f: Cursor[Mongo]): seq[Bson] =
   ## Perform MongoDB query and return all matching documents

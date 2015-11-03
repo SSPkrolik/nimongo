@@ -10,27 +10,26 @@ const
   TestSyncCol  = "sync"
   TestAsyncCol = "async"
 
+var
+  sm: Mongo = newMongo()           ## Mongo synchronous client
+  am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
+
+let
+  sdb: Database[Mongo] = sm[TestDB]
+  adb: Database[AsyncMongo] = am[TestDB]
+  sco: Collection[Mongo] = sdb[TestSyncCol]
+  aco: Collection[AsyncMongo] = adb[TestAsyncCol]
+
+# Connection is required for running tests
+require(sm.connect() == true)
+require(waitFor(am.connect()) == true)
+
 suite "Mongo instance administration commands test suite":
 
   echo "\n Mongo instance administration commands test suite\n"
 
   setup:
-    var
-      sm: Mongo = newMongo()           ## Mongo synchronous client
-      am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
-    let
-      sdb: Database[Mongo] = sm[TestDB]
-      adb: Database[AsyncMongo] = am[TestDB]
-      sco: Collection[Mongo] = sdb[TestSyncCol]
-      aco: Collection[AsyncMongo] = adb[TestAsyncCol]
-
-    # Connection is required for running tests
-    require(sm.connect() == true)
-    require(waitFor(am.connect()) == true)
-
-    # Collections must not exist before tests in the suite
-    discard sco.drop()
-    discard waitFor(aco.drop())
+    discard
 
   test "[ASYNC] [SYNC] Command: 'isMaster'":
     var m: bool
@@ -51,27 +50,12 @@ suite "Mongo instance administration commands test suite":
   #  let sclist = sdb.listCollections()
   #  #check(sclist.len() == 3)
 
-
 suite "Mongo collection-level operations":
 
   echo "\n Mongo collection-level operations\n"
 
   setup:
-    var
-        sm: Mongo = newMongo()           ## Mongo synchronous client
-        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
-    let
-        sdb: Database[Mongo] = sm[TestDB]
-        adb: Database[AsyncMongo] = am[TestDB]
-        sco: Collection[Mongo] = sdb[TestSyncCol]
-        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
-
-    require(sm.connect() == true)
-    require(waitFor(am.connect()) == true)
-
-    # Collections must not exist before tests in the suite
-    discard sm[TestDB][TestSyncCol].drop()
-    discard waitFor(am[TestDB][TestAsyncCol].drop())
+    discard
 
   test "[ASYNC] [SYNC] 'count' documents in collection":
     for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
@@ -95,21 +79,7 @@ suite "Mongo client operations test suite":
   echo "\n Mongo client operations \n"
 
   setup:
-    var
-        sm: Mongo = newMongo()           ## Mongo synchronous client
-        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
-    let
-        sdb: Database[Mongo] = sm[TestDB]
-        adb: Database[AsyncMongo] = am[TestDB]
-        sco: Collection[Mongo] = sdb[TestSyncCol]
-        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
-
-    require(sm.connect() == true)
-    require(waitFor(am.connect()) == true)
-
-    # Collections must not exist before tests in the suite
-    discard sm[TestDB][TestSyncCol].drop()
-    discard waitFor(am[TestDB][TestAsyncCol].drop())
+    discard
 
   test "[ASYNC] [SYNC] Mongo object `$` operator":
     check($sm == "mongodb://127.0.0.1:27017")
@@ -196,21 +166,7 @@ suite "Mongo aggregation commands":
   echo "\n Mongo aggregation commands\n"
 
   setup:
-    var
-        sm: Mongo = newMongo()           ## Mongo synchronous client
-        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
-    let
-        sdb: Database[Mongo] = sm[TestDB]
-        adb: Database[AsyncMongo] = am[TestDB]
-        sco: Collection[Mongo] = sdb[TestSyncCol]
-        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
-
-    require(sm.connect() == true)
-    require(waitFor(am.connect()) == true)
-
-    # Collections must not exist before tests in the suite
-    discard sm[TestDB][TestSyncCol].drop()
-    discard waitFor(am[TestDB][TestAsyncCol].drop())
+    discard
 
   test "[ASYNC] [SYNC] Count documents in query result":
     sco.insert(@[B("string", "value"), B("string", "value")])
@@ -231,21 +187,7 @@ suite "Mongo client querying test suite":
   echo "\n Mongo client querying\n"
 
   setup:
-    var
-        sm: Mongo = newMongo()           ## Mongo synchronous client
-        am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
-    let
-        sdb: Database[Mongo] = sm[TestDB]
-        adb: Database[AsyncMongo] = am[TestDB]
-        sco: Collection[Mongo] = sdb[TestSyncCol]
-        aco: Collection[AsyncMongo] = adb[TestAsyncCol]
-
-    require(sm.connect() == true)
-    require(waitFor(am.connect()) == true)
-
-    # Collections must not exist before tests in the suite
-    discard sm[TestDB][TestSyncCol].drop()
-    discard waitFor(am[TestDB][TestAsyncCol].drop())
+    discard
 
   test "[ASYNC] [SYNC] Query single document":
     let myId = genOid()
@@ -283,3 +225,7 @@ suite "Mongo client querying test suite":
     check(waitFor(aco.find(B("label", "l")).skip(3).all()).len() == 2)
 
 echo ""
+
+# Collections must not exist before tests in the suite
+discard sco.drop()
+discard waitFor(aco.drop())
