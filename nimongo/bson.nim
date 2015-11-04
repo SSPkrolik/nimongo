@@ -1,11 +1,14 @@
 import algorithm
 import base64
+import marshal
 import md5
 import oids
 import sequtils
 import streams
 import strutils
 import times
+
+import timeit
 
 # ------------- type: BsonKind -------------------#
 
@@ -60,7 +63,7 @@ type
     increment*: int32
     timestamp*: int32
 
-  Bson* = object of RootObj  ## Bson Node
+  Bson* = ref object of RootObj  ## Bson Node
     key: string
     case kind*: BsonKind
     of BsonKindDouble:           valueFloat64:     float64
@@ -173,18 +176,18 @@ converter toBson*(x: var MD5Context): Bson =
 
 proc int32ToBytes*(x: int32): string =
     ## Convert int32 data piece into series of bytes
-    let a = toSeq(cast[array[0..3, char]](x).items())
-    return a.mapIt(string, $it).join()
+    result = newString(4).TaintedString
+    copyMem(addr(result[0]), unsafeAddr x, 4)
 
 proc float64ToBytes*(x: float64): string =
   ## Convert float64 data piece into series of bytes
-  let a = toSeq(cast[array[0..7, char]](x).items())
-  return a.mapIt(string, $it).join()
+  result = newString(8).TaintedString
+  copyMem(addr(result[0]), unsafeAddr x, 8)
 
 proc int64ToBytes*(x: int64): string =
   ## Convert int64 data piece into series of bytes
-  let a = toSeq(cast[array[0..7, char]](x).items())
-  return a.mapIt(string, $it).join()
+  result = newString(8).TaintedString
+  copyMem(addr(result[0]), unsafeAddr x, 8)
 
 proc boolToBytes*(x: bool): string =
   ## Convert bool data piece into series of bytes
@@ -193,8 +196,8 @@ proc boolToBytes*(x: bool): string =
 
 proc oidToBytes*(x: Oid): string =
   ## Convert Mongo Object ID data piece into series to bytes
-  let a = toSeq(cast[array[0..11, char]](x).items())
-  return a.mapIt(string, $it).join()
+  result = newString(12).TaintedString
+  copyMem(addr(result[0]), unsafeAddr x, 12)
 
 proc bytes*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
@@ -472,13 +475,11 @@ proc initBsonDocument*(bytes: string): Bson =
             discard s.readChar()
             return doc(name.string, valueString)
         of BsonKindDocument:
-            let ds: int32 = stream.readInt32()
-            s.setPosition(s.getPosition() - 4)
+            let ds: int32 = stream.peekInt32()
             var subdoc = initBsonDocument(s.readStr(ds))
             return doc(name.string, subdoc)
         of BsonKindArray:
-            let ds: int32 = stream.readInt32()
-            s.setPosition(s.getPosition() - 4)
+            let ds: int32 = stream.peekInt32()
             var subdoc = initBsonDocument(s.readStr(ds))
             var subarr = initBsonArray()
             subarr.valueArray = subdoc.valueDocument
@@ -530,8 +531,7 @@ proc initBsonDocument*(bytes: string): Bson =
         else:
             raise new(Exception)
 
-    while stream.readChar() != 0.char:
-        stream.setPosition(stream.getPosition() - 1)
+    while stream.peekChar() != 0.char:
         document = parseBson(stream, document)
 
     return document

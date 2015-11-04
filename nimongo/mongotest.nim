@@ -1,10 +1,12 @@
 import asyncdispatch
-import nimprof
 import oids
+import strutils
+import times
 import unittest
 
 import bson
 import mongo
+import timeit
 
 const
   TestDB       = "testdb"
@@ -63,10 +65,26 @@ suite "Mongo collection-level operations":
 
   test "[ASYNC] [SYNC] 'count' documents in collection":
 
-    for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
+    check(sco.insert(
+      @[
+        B("iter", 0.int32)("label", "l"),
+        B("iter", 1.int32)("label", "l"),
+        B("iter", 2.int32)("label", "l"),
+        B("iter", 3.int32)("label", "l"),
+        B("iter", 4.int32)("label", "l")
+      ]
+    ))
     check(sco.count() == 5)
 
-    for i in 0..<5: check(waitFor(aco.insert(B("iter", i.int32)("label", "l"))))
+    check(waitFor(aco.insert(
+      @[
+        B("iter", 0.int32)("label", "l"),
+        B("iter", 1.int32)("label", "l"),
+        B("iter", 2.int32)("label", "l"),
+        B("iter", 3.int32)("label", "l"),
+        B("iter", 4.int32)("label", "l")
+      ]
+    )))
     check(waitFor(aco.count()) == 5)
 
   test "[ASYNC] [SYNC] 'drop' collection":
@@ -142,8 +160,8 @@ suite "Mongo client operations test suite":
 
   test "[ASYNC] [SYNC] Upsert":
     let
-      selector = B("integer", 100'i32)
-      updater  = B("$set", B("integer", 200'i32))
+      selector = B("integer", 100'i64)
+      updater  = B("$set", B("integer", 200'i64))
 
     check(sco.update(selector, updater, UpdateSingle, Upsert) == true)
     check(waitFor(aco.update(selector, updater, UpdateSingle, Upsert)) == true)
@@ -183,10 +201,10 @@ suite "Mongo aggregation commands":
     check(waitFor(aco.find(B("string", "value")).count()) == 2)
 
   test "[ASYNC] [SYNC] Query distinct values by field in collection documents":
-    sco.insert(@[B("string", "value")("int", 1), B("string", "value")("double", 2.0)])
+    sco.insert(@[B("string", "value")("int", 1'i64), B("string", "value")("double", 2.0)])
     check(sco.find(B("string", "value")).unique("string") == @["value"])
 
-    check(waitFor(aco.insert(@[B("string", "value")("int", 1), B("string", "value")("double", 2.0)])) == true)
+    check(waitFor(aco.insert(@[B("string", "value")("int", 1'i64), B("string", "value")("double", 2.0)])) == true)
     check(waitFor(aco.find(B("string", "value")).unique("string")) == @["value"])
 
 suite "Mongo client querying test suite":
@@ -242,10 +260,26 @@ suite "Mongo client querying test suite":
     check(waitFor(aco.find(B("label", "l")).limit(3).all()).len() == 3)
 
   test "[ASYNC] [SYNC] Skip documents":
-    for i in 0..<5: check(sco.insert(B("iter", i.int32)("label", "l")))
+    check(sco.insert(
+      @[
+        B("iter", 0.int32)("label", "l"),
+        B("iter", 1.int32)("label", "l"),
+        B("iter", 2.int32)("label", "l"),
+        B("iter", 3.int32)("label", "l"),
+        B("iter", 4.int32)("label", "l")
+      ]
+    ))
     check(sco.find(B("label", "l")).skip(3).all().len() == 2)
 
-    for i in 0..<5: check(waitFor(aco.insert(B("iter", i.int32)("label", "l"))))
+    check(waitFor(aco.insert(
+      @[
+        B("iter", 0.int32)("label", "l"),
+        B("iter", 1.int32)("label", "l"),
+        B("iter", 2.int32)("label", "l"),
+        B("iter", 3.int32)("label", "l"),
+        B("iter", 4.int32)("label", "l")
+      ]
+    )))
     check(waitFor(aco.find(B("label", "l")).skip(3).all()).len() == 2)
 
 echo ""

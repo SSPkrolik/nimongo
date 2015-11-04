@@ -12,9 +12,11 @@ import streams
 import strutils
 import tables
 import typetraits
+import times
 import json
 
 import bson
+import timeit
 
 type OperationKind = enum    ## Type of operation performed by MongoDB
   # OP_REPLY        =    1'i32 ##
@@ -118,7 +120,7 @@ proc newCursor[T](c: Collection[T]): Cursor[T] =
 
 proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
     ## Build Mongo message header as a series of bytes
-    return int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
+    result = int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
 
 proc buildMessageInsert(flags: int32, fullCollectionName: string): string =
     ## Build Mongo insert messsage
@@ -439,12 +441,11 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
   if f.fields.len() > 0:
       for field in f.fields.items():
           bfields = bfields(field, 1'i32)
-  let
-      squery = f.query.bytes()
-      sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
-      msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
+  let squery = f.query.bytes()
+  let sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
+  let msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
 
-  return msgHeader & buildMessageQuery(0, $(f.collection), numberToSkip , numberToReturn) & squery & sfields
+  result = msgHeader & buildMessageQuery(0, $(f.collection), numberToSkip , numberToReturn) & squery & sfields
 
 iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int32): Bson {.closure.} =
   ## Private procedure for performing actual query to Mongo
@@ -482,7 +483,8 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
 
 proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
   ## Private procedure for performing actual query to Mongo via async client
-  var ls = await f.collection.client.next()
+  var ls: AsyncLockedSocket
+  ls = await f.collection.client.next()
 
   ls.inuse = true
   await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
