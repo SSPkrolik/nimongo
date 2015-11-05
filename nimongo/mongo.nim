@@ -95,10 +95,15 @@ type
     query:      Bson
     fields:     seq[string]
     queryFlags: int32
-    nskip:       int32
-    nlimit:      int32
+    nskip:      int32
+    nlimit:     int32
 
   NotFound* = object of Exception   ## Raises when querying of one documents returns empty result
+
+  MongoError* = object
+    ok*:  bool
+    err*: string
+    n*:   int
 
 # === Private APIs === #
 
@@ -140,7 +145,7 @@ proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: i
 
 # === Mongo client API === #
 
-proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017): Mongo =
+proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017, secure=false): Mongo =
     ## Mongo client constructor
     result.new
     result.host = host
@@ -667,3 +672,23 @@ proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} 
   if ok == 1.0:
     for item in va.items():
       result.add(item.toString())
+
+# Error processing
+
+proc getLastError*(m: Mongo): MongoError =
+  ## Get last error happened in current connection
+  let response = m["admin"]["$cmd"].find(B("getLastError", 1'i32)).one()
+  return MongoError(
+    ok:  if response["ok"].kind == BsonKindInt32: response["ok"] == 1 else: response["ok"] == 1.0,
+    err: if response["err"].kind == BsonKindNull: "" else: response["err"],
+    n:   toInt32(response["n"])
+  )
+
+proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
+  ## Get last error happened in current connection
+  let response = await am["admin"]["$cmd"].find(B("getLastError", 1'i32)).one()
+  return MongoError(
+    ok:  if response["ok"].kind == BsonKindInt32: response["ok"] == 1 else: response["ok"] == 1.0,
+    err: if response["err"].kind == BsonKindNull: "" else: response["err"],
+    n:   toInt32(response["n"])
+  )

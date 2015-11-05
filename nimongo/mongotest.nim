@@ -55,6 +55,17 @@ suite "Mongo instance administration commands test suite":
   #  let sclist = sdb.listCollections()
   #  #check(sclist.len() == 3)
 
+suite "Mongo connection error-handling operations":
+
+  echo "\n Mongo connection error-handling operations\n"
+
+  setup:
+    discard
+
+  test "[ASYNC] [SYNC] Command: 'getLastError'":
+    check(sm.getLastError().ok == true)
+    check(waitFor(am.getLastError()).ok == true)
+
 suite "Mongo collection-level operations":
 
   echo "\n Mongo collection-level operations\n"
@@ -155,8 +166,8 @@ suite "Mongo client operations test suite":
     check(sco.update(selector, updater, UpdateMultiple, NoUpsert) == true)
     check(waitFor(aco.update(selector, updater, UpdateMultiple, NoUpsert)) == true)
 
-    check(sco.find(B("integer", 200)).all().len() == 2)
-    check(waitFor(aco.find(B("integer", 200)).all()).len() == 2)
+    check(sco.find(B("integer", 200'i32)).all().len() == 2)
+    check(waitFor(aco.find(B("integer", 200'i32)).all()).len() == 2)
 
   test "[ASYNC] [SYNC] Upsert":
     let
@@ -182,6 +193,7 @@ suite "Mongo client operations test suite":
     check(sco.find(B("string", "value")).all().len() == 0)
 
     check(waitFor(aco.insert(@[B("string", "value"), B("string", "value")])) == true)
+    waitFor(sleepAsync(1))
     check(waitFor(aco.remove(B("string", "value"), RemoveMultiple)) == true)
     check(waitFor(aco.find(B("string", "value")).all()).len() == 0)
 
