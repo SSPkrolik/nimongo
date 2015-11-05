@@ -164,7 +164,7 @@ This table represents MongoDB features and their implementation status within
 |            | Partial         | :red_circle:       | :red_circle:       | |
 |            | FindAndModify   | :red_circle:       | :red_circle:       | |
 |            | parallelCollectionScan | :red_circle:| :red_circle:       | |
-|            | getLastError    | :red_circle:       | :white_check_mark: | |
+|            | getLastError    | :white_check_mark: | :white_check_mark: | |
 |Authentication |              | __0__ / __7__      | __0__ / __7__      | |
 |            | authenticate    | :red_circle:       | :red_circle:       | |
 |            | SCRAM-SHA-1     | :red_circle:       | :red_circle:       | |
