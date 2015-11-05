@@ -154,14 +154,7 @@ This table represents MongoDB features and their implementation status within
 |            | Connect Timeout | :red_circle:       | :red_circle:       | |
 |            | Write Concern   | :red_circle:       | :red_circle:       | |
 |            | Read Preference | :red_circle:       | :red_circle:       | |
-|Operations  |                 | __7__ / __7__      | __7__ / __7__      | |
-|            | Insert          | :white_check_mark: | :white_check_mark: | |
-|            | Multiple Insert | :white_check_mark: | :white_check_mark: | |
-|            | Remove single   | :white_check_mark: | :white_check_mark: | |
-|            | Remove multiple | :white_check_mark: | :white_check_mark: | |
-|            | Update single   | :white_check_mark: | :white_check_mark: | |
-|            | Update multiple | :white_check_mark: | :white_check_mark: | |  
-|            | Upsert          | :white_check_mark: | :white_check_mark: | |
+|Operations  | Insert (Single/Multiple), Remove (Single/Multiple), Update (Single/Multiple/Upsert) | :white_check_mark: | :white_check_mark: | |
 |Querying    |                 | __6__ / __10__     | __5__ / __9__      | |
 |            | Find one        | :white_check_mark: | :white_check_mark: | |
 |            | Find all        | :white_check_mark: | :white_check_mark: | |
