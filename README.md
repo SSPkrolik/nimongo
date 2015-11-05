@@ -125,38 +125,10 @@ Here's a list of supported features with appropriate status icons:
 
 BSON
 ----
-This table represents BSON data types and their implementation status
-within `nimongo.bson` Nim module.
 
-| Block      | Data Type       | Status             |
-|-----------:|:----------------|:------------------:|
-| Data Types |                 |                    |
-|            | Double          | :white_check_mark: |
-|            | String          | :white_check_mark: |
-|            | SubSocument     | :white_check_mark: |
-|            | String          | :white_check_mark: |
-|            | Array           | :white_check_mark: |
-|            | Mongo ObjectId  | :white_check_mark: |
-|            | Undefined       | :white_check_mark: |
-|            | Boolean         | :white_check_mark: |
-|            | UTC datetime    | :white_check_mark: |
-|            | Null            | :white_check_mark: |
-|            | RegExp          | :white_check_mark: |
-|            | DBRef           | :white_check_mark: |
-|            | JavaScript code | :white_check_mark: |
-|            | JavaScript code w/ scope|:red_circle:|
-|            | Int32           | :white_check_mark: |
-|            | Timestamp (inner)|:white_check_mark: |
-|            | Int64           | :white_check_mark: |
-|            | Minimum Key     | :white_check_mark: |
-|            | Maximum Key     | :white_check_mark: |
-| Binary Subtypes |            |                    |
-|            | Generic         | :white_check_mark: |
-|            | Binary (Old)    | :red_circle:       |
-|            | UUID (Old)      | :red_circle:       |
-|            | UUID            | :red_circle:       |
-|            | MD5             | :white_check_mark: |
-|            | User-defined    | :red_circle:       |
+`nimongo.bson` module implements full BSON specification, and includes means
+for developer-friendly BSON creation, modification, serialization and
+deserialization.
 
 MongoDB Features
 ----------------
