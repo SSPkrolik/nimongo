@@ -95,7 +95,7 @@ type
     of BsonKindDeprecated:       valueDepr:        string
     of BsonKindJSCodeWithScope:  valueCodeWS:      string
     of BsonKindInt32:            valueInt32:       int32
-    of BsonKindTimestamp:        valueTimestamp:   int64
+    of BsonKindTimestamp:        valueTimestamp:   BsonTimestamp
     of BsonKindInt64:            valueInt64:       int64
     of BsonKindMaximumKey:       discard
     of BsonKindMinimumKey:       discard
@@ -162,6 +162,14 @@ converter toBson*(x: Time): Bson =
 converter toTime*(x: Bson): Time =
     ## Convert Bson object to Time
     return x.valueTime
+
+converter toBson*(x: BsonTimestamp): Bson =
+  ## Convert inner BsonTimestamp to Bson object
+  return Bson(key: "", kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
+
+converter toTimestamp*(x: Bson): BsonTimestamp =
+  ## Convert Bson object to inner BsonTimestamp type
+  return x.valueTimestamp
 
 converter toBson*(x: MD5Digest): Bson =
   ## Convert MD5Digest to Bson object
@@ -249,6 +257,8 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0) & int32ToBytes(int32(len(bs.valueCode)) + 1) & bs.valueCode & char(0)
     of BsonKindInt32:
         return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
+    of BsonKindTimestamp:
+        return bs.kind & bs.key & char(0) & int64ToBytes(cast[ptr int64](addr bs.valueTimestamp)[])
     of BsonKindInt64:
         return bs.kind & bs.key & char(0) & int64ToBytes(bs.valueInt64)
     of BsonKindMinimumKey:
@@ -319,6 +329,8 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": $#" % [bs.key, bs.valueCode] ## TODO: make valid JSON here
         of BsonKindInt32:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
+        of BsonKindTimestamp:
+            return "\"$#\": {\"$$timestamp\": $#}" % [bs.key, $(cast[ptr int64](addr bs.valueTimestamp)[])]
         of BSonKindInt64:
             return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
         of BsonKindMinimumKey:
@@ -522,6 +534,8 @@ proc initBsonDocument*(bytes: string): Bson =
             return doc(name.string, js(code))
         of BsonKindInt32:
             return doc(name.string, s.readInt32())
+        of BsonKindTimestamp:
+            return doc(name.string, cast[BsonTimestamp](s.readInt64()))
         of BsonKindInt64:
             return doc(name.string, s.readInt64())
         of BsonKindMinimumKey:
@@ -554,6 +568,7 @@ when isMainModule:
         "undefined", undefined())(
         "someJS", js("function identity(x) {return x;}"))(
         "someRef", dbref("db.col", genOid()))(
+        "someTimestamp", BsonTimestamp(increment: 1, timestamp: 1))(
         "subdoc", initBsonDocument()(
             "salary", 500
         )(
