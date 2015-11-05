@@ -21,6 +21,15 @@ list.
 > WARNING! Current `master` version of `nimongo` works only with the
 > latest version of Nim from git repo: `devel` branch.
 
+Current status (briefly)
+------------------------
+
+Currently `nimongo.mongo` implements connection to single MongoDB server, and
+support for most widely used queries (whole CRUD with some exceptions),
+`nimongo.bson` gives full support of current BSON specification. As for
+performance, it is comparable with `pymongo` Python driver on crude timeit-style
+tests.
+
 Usage of synchronous client
 ---------------------------
 `nimongo.mongo.Mongo` synchronous client perform interaction with MongoDB
