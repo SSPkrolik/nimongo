@@ -237,6 +237,8 @@ proc bytes*(bs: Bson): string =
             return bs.kind & bs.key & char(0) & int32ToBytes(int32(16)) & bs.subtype.char & sdig
         of BsonSubtypeGeneric:
             return bs.kind & bs.key & char(0) & int32ToBytes(int32(bs.valueGeneric.len())) & bs.subtype.char & bs.valueGeneric
+        of BsonSubtypeUserDefined:
+            return bs.kind & bs.key & char(0) & int32ToBytes(int32(bs.valueUserDefined.len())) & bs.subtype.char & bs.valueUserDefined
         else:
             raise new(Exception)
     of BsonKindUndefined:
@@ -306,6 +308,8 @@ proc `$`*(bs: Bson): string =
                 return "\"$#\": {\"$$md5\": \"$#\"}" % [bs.key, $bs.valueDigest]
             of BsonSubtypeGeneric:
                 return "\"$#\": {\"$$bindata\": \"$#\"}" % [bs.key, base64.encode(bs.valueGeneric)]
+            of BsonSubtypeUserDefined:
+                return "\"$#\": {\"$$bindata\": \"$#\"}" % [bs.key, base64.encode(bs.valueUserDefined)]
             else:
                 raise new(Exception)
         of BsonKindUndefined:
@@ -397,7 +401,17 @@ proc js*(code: string): Bson =
 
 proc bin*(bindata: string): Bson =
   ## Create new binary Bson object with 'generic' subtype
-  return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeGeneric, valueGeneric: bindata)
+  return Bson(
+    key: "", kind: BsonKindBinary, subtype: BsonSubtypeGeneric,
+    valueGeneric: bindata
+  )
+
+proc binuser*(bindata: string): Bson =
+  ## Create new binray Bson object with 'user-defined' subtype
+  return Bson(
+    key: "", kind: BsonKindBinary, subtype: BsonSubtype.BsonSubtypeUserDefined,
+    valueUserDefined: bindata
+  )
 
 proc geo*(loc: GeoPoint): Bson =
   ## Convert array of two floats into Bson as MongoDB Geo-Point.
@@ -505,6 +519,8 @@ proc initBsonDocument*(bytes: string): Bson =
                 return doc(name.string, cast[MD5Digest](s.readStr(ds).cstring))
             of BsonSubtypeGeneric:
                 return doc(name.string, bin(s.readStr(ds)))
+            of BsonSubtype.BsonSubtypeUserDefined:
+                return doc(name.string, binuser(s.readStr(ds)))
             else:
                 raise new(Exception)
         of BsonKindUndefined:
@@ -568,6 +584,7 @@ when isMainModule:
         "undefined", undefined())(
         "someJS", js("function identity(x) {return x;}"))(
         "someRef", dbref("db.col", genOid()))(
+        "userDefined", binuser("some-binary-data"))(
         "someTimestamp", BsonTimestamp(increment: 1, timestamp: 1))(
         "subdoc", initBsonDocument()(
             "salary", 500
