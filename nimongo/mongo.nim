@@ -14,6 +14,8 @@ import tables
 import typetraits
 import times
 import json
+import uri
+import os
 
 import bson
 import timeit
@@ -52,6 +54,7 @@ const
   Exhaust         = 1'i32 shl 6 ##
   Partial         = 1'i32 shl 7 ## Get info only from running shards
 
+const DefaultMongoPort = 27017'u16
 ##  const
 ##    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
 ##    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
@@ -67,6 +70,7 @@ type
     host:         string
     port:         uint16
     queryFlags:   int32
+    username, password: string
     replicas:     seq[tuple[host: string, port: uint16]]
 
   AsyncLockedSocket = object
@@ -145,15 +149,31 @@ proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: i
 
 # === Mongo client API === #
 
-proc newMongo*(host: string = "127.0.0.1", port: uint16 = 27017, secure=false): Mongo =
+proc init(b: MongoBase, host: string, port: uint16) =
+    b.host = host
+    b.port = port
+    b.requestID = 0
+    b.queryFlags = 0
+    b.replicas = @[]
+
+proc init(b: MongoBase, u: Uri) =
+    let port = if u.port.len > 0: parseInt(u.port).uint16 else: DefaultMongoPort
+    b.init(u.hostname, port)
+    b.username = u.username
+    b.password = u.password
+
+proc newMongo*(host: string = "127.0.0.1", port: uint16 = DefaultMongoPort, secure=false): Mongo =
     ## Mongo client constructor
     result.new
-    result.host = host
-    result.port = port
-    result.requestID = 0
-    result.queryFlags = 0
+    result.init(host, port)
     result.sock = newSocket()
-    result.replicas = @[]
+
+proc newMongoWithURI*(u: Uri): Mongo =
+    result.new
+    result.init(u)
+    result.sock = newSocket()
+
+proc newMongoWithURI*(u: string): Mongo = newMongoWithURI(parseUri(u))
 
 proc newAsyncLockedSocket(): AsyncLockedSocket =
   ## Constructor for "locked" async socket
@@ -162,18 +182,24 @@ proc newAsyncLockedSocket(): AsyncLockedSocket =
     sock: newAsyncSocket()
   )
 
-proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = 27017, maxConnections=16): AsyncMongo =
+proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = DefaultMongoPort, maxConnections=16): AsyncMongo =
     ## Mongo asynchrnonous client constructor
     result.new
-    result.host = host
-    result.port = port
-    result.requestID = 0
-    result.queryFlags = 0
+    result.init(host, port)
     result.pool = @[]
     for i in 0..<maxConnections:
       result.pool.add(newAsyncLockedSocket())
     result.current = -1
-    result.replicas = @[]
+
+proc newAsyncMongoWithURI*(u: Uri, maxConnections=16): AsyncMongo =
+    result.new
+    result.init(u)
+    result.pool = @[]
+    for i in 0..<maxConnections:
+      result.pool.add(newAsyncLockedSocket())
+    result.current = -1
+
+proc newAsyncMongoWithURI*(u: string): AsyncMongo = newAsyncMongoWithURI(parseUri(u))
 
 proc next(am: AsyncMongo): Future[AsyncLockedSocket] {.async.} =
   ## Retrieves next non-in-use async socket for request
@@ -692,3 +718,21 @@ proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
     err: if response["err"].kind == BsonKindNull: "" else: response["err"],
     n:   toInt32(response["n"])
   )
+
+proc newMongoDatabase*(u: Uri): Database[Mongo] =
+    let client = newMongoWithURI(u)
+    if client.connect():
+        result.new()
+        result.name = u.path.extractFileName()
+        result.client = client
+
+proc newMongoDatabase*(u: string): Database[Mongo] = newMongoDatabase(parseUri(u))
+
+proc newAsyncMongoDatabase*(u: Uri): Future[Database[AsyncMongo]] {.async.} =
+    let client = newAsyncMongoWithURI(u)
+    if await client.connect():
+        result.new()
+        result.name = u.path.extractFileName()
+        result.client = client
+
+proc newAsyncMongoDatabase*(u: string): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u))
