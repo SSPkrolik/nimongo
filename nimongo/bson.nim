@@ -406,6 +406,9 @@ proc bin*(bindata: string): Bson =
     valueGeneric: bindata
   )
 
+proc binstr*(x: Bson): string =
+  return x.valueGeneric
+
 proc binuser*(bindata: string): Bson =
   ## Create new binray Bson object with 'user-defined' subtype
   return Bson(

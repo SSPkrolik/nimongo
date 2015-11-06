@@ -74,8 +74,9 @@ suite "Authentication":
     discard
 
   test "[     ] [SYNC] Command: 'authenticate', method: 'plain'":
-    let authtestdb = newMongoDatabase("mongodb://test:test@localhost/testdb")
+    let authtestdb = newMongoDatabase("mongodb://test:test@localhost:8081/testdb")
     check($authtestdb == "testdb")
+    authtestdb[TestSyncCol].insert(B("data", "auth"))
 
 suite "Mongo collection-level operations":
 

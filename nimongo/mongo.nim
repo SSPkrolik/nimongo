@@ -4,7 +4,9 @@ when hostOs == "linux":
 
 import asyncdispatch
 import asyncnet
+import base64
 import locks
+import math
 import md5
 import net
 import oids
@@ -20,6 +22,11 @@ import os
 
 import bson
 import timeit
+
+import pbkdf2
+import sha1
+
+randomize()
 
 type OperationKind = enum    ## Type of operation performed by MongoDB
   # OP_REPLY        =    1'i32 ##
@@ -729,23 +736,104 @@ proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
 
 # Authentication
 
+proc seqToString(s: seq[char]): string =
+  result = newString(len(s))
+  for i,c in s:
+    result[i]=c
+
+proc authenticateScramSha1(db: Database[Mongo], username: string, password: string): bool {.discardable.} =
+  ## Authenticate connection (sync): using SCRAM-SHA-1 auth method
+  if username == "" or password == "":
+    return false
+
+  let uname = username.replace("=", "=3D").replace(",", "=2C")
+  let nonce = base64.encode(($random(1.0))[2..^1])
+  let fb = "n=" & uname & ",r=" & nonce
+
+  let requestStart = B(
+    "saslStart", 1'i32)(
+    "mechanism", "SCRAM-SHA-1")(
+    "payload", bin("n,," & fb))(
+    "autoAuthorize", 1'i32
+  )
+  let responseStart = db["$cmd"].find(requestStart).one()
+  let responsePayload: string = binstr(responseStart["payload"])
+
+  var parsedPayload = initTable[string, string]()
+  for item in responsePayload.split(","):
+    let key = item[0..item.find('=') - 1]
+    let val = item[item.find('=') + 1..^1]
+    parsedPayload[key] = val
+
+  let iterations = parseInt(parsedPayload["i"])
+  let salt = parsedPayload["s"]
+  let rnonce = parsedPayload["r"]
+
+  let withoutProof = "c=biws,r=" & rnonce
+  let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
+  var saltedPass: string = ""
+  saltedPass.setLen(20)
+  discard PKCS5_PBKDF2_HMAC_SHA1(cast[pointer](passwordDigest.cstring), len(passwordDigest).uint, cast[pointer](salt.cstring), len(salt).uint, iterations.uint, 20.uint, cast[pointer](saltedPass.cstring))
+
+  let client_key = HMAC(EVP_sha1(), cast[pointer](saltedPass.cstring), len(saltedPass).cint, cast[pointer]("Client Key".cstring), len("Client Key").cint)
+  let stored_key = sha1.compute($client_key).toHex()
+  let auth_msg = join([fb, responsePayload, withoutProof], ",")
+  let client_sig = HMAC(EVP_sha1(), cast[pointer](stored_key.cstring), stored_key.len().cint, cast[pointer](auth_msg.cstring), auth_msg.len().cint)
+
+  var toEncode: seq[char] = @[]
+  for i in 0..<client_key.len():
+    toEncode.add((client_key[i].int8 xor client_sig[i].int8).char)
+
+  let client_proof = "p=" & base64.encode(seqToString(toEncode))
+  let client_final = join([without_proof, client_proof], ",")
+
+  let server_key = HMAC(EVP_sha1(), cast[pointer](salted_pass.cstring), len(saltedPass).cint, cast[pointer]("Server Key".cstring), len("Server Key").cint)
+  let server_sig = base64.encode(
+    $(HMAC(EVP_sha1(), cast[pointer](server_key), len(server_key).cint, cast[pointer](auth_msg.cstring), len(auth_msg).cint))
+  )
+
+  let requestContinue1 = B(
+    "saslContinue", 1'i32)(
+    "conversationId", toInt32(responseStart["conversationId"]))(
+    "payload", bin(client_final)
+  )
+  let responseContinue1 =  db["$cmd"].find(requestContinue1).one()
+
+  let parsedPayload1 = binstr(responseContinue1["payload"])
+  discard """
+  if not compare_digest(parsed[b'v'], server_sig):
+      raise OperationFailure("Server returned an invalid signature.")
+
+  # Depending on how it's configured, Cyrus SASL (which the server uses)
+  # requires a third empty challenge.
+  if not res['done']:
+      cmd = SON([('saslContinue', 1),
+                 ('conversationId', res['conversationId']),
+                 ('payload', Binary(b''))])
+      res = sock_info.command(source, cmd)
+      if not res['done']:
+          raise OperationFailure('SASL conversation failed to complete.')
+  """
+  return true
+
 proc authenticate*(db: Database[Mongo], username: string, password: string): bool {.discardable.} =
   ## Authenticate connection (sync): using MONGODB-CR auth method
   if username == "" or password == "":
     return false
-  else:
-    let nonce: string = db["$cmd"].find(B("getnonce", 1'i32)).one()["nonce"]
-    let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
-    let key = $toMd5("$#$#$#" % [nonce, username, passwordDigest])
-    let request = B(
-      "authenticate", 1'i32)(
-      "mechanism", "MONGODB-CR")(
-      "user", username)(
-      "nonce", nonce)(
-      "key", key
-    )
-    let response = db["$cmd"].find(request).one()
-    return if response["ok"] == 0: false else: true
+
+  let nonce: string = db["$cmd"].find(B("getnonce", 1'i32)).one()["nonce"]
+  let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
+  let key = $toMd5("$#$#$#" % [nonce, username, passwordDigest])
+  let request = B(
+    "authenticate", 1'i32)(
+    "mechanism", "MONGODB-CR")(
+    "user", username)(
+    "nonce", nonce)(
+    "key", key)(
+    "autoAuthorize", 1'i32
+  )
+  let response = db["$cmd"].find(request).one()
+  return if response["ok"] == 0: false else: true
 
 proc authenticate(am: AsyncMongo): bool =
   ## Authenticate connection (async)
