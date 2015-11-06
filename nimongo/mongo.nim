@@ -5,6 +5,7 @@ when hostOs == "linux":
 import asyncdispatch
 import asyncnet
 import locks
+import md5
 import net
 import oids
 import sequtils
@@ -41,6 +42,14 @@ type UpsertKind* = enum ## Indicates if need to make upsert
   Upsert                ## Upsert allowed
   NoUpsert              ## Upsert disallowed
 
+type AuthenticationMethod* = enum ## What type of authentication we use
+  NoAuth
+  ScramSHA1
+  MongodbCr
+  MongodbX509
+  Kerberos                        ## Enterprise-only
+  Ldap                            ## Enterprise-only
+
 type ClientKind* = enum
   ClientKindBase  = 0
   ClientKindSync  = 1
@@ -55,10 +64,10 @@ const
   Partial         = 1'i32 shl 7 ## Get info only from running shards
 
 const DefaultMongoPort = 27017'u16
-##  const
-##    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
-##    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
-##    AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
+#  const
+#    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
+#    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
+#    AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
 
 converter toInt32*(ok: OperationKind): int32 =
   ## Convert OperationKind ot int32
@@ -66,20 +75,23 @@ converter toInt32*(ok: OperationKind): int32 =
 
 type
   MongoBase* = ref object of RootObj    ## Base Mongo client
-    requestId:    int32
-    host:         string
-    port:         uint16
-    queryFlags:   int32
-    username, password: string
-    replicas:     seq[tuple[host: string, port: uint16]]
+    requestId:  int32
+    host:       string
+    port:       uint16
+    queryFlags: int32
+    username:   string
+    password:   string
+    replicas:   seq[tuple[host: string, port: uint16]]
 
   AsyncLockedSocket = object
-    inuse: bool
-    sock:  AsyncSocket
+    inuse:         bool
+    authenticated: bool
+    sock:          AsyncSocket
 
   Mongo* = ref object of MongoBase      ## Mongo client object
-    requestLock: Lock
-    sock:        Socket
+    requestLock:   Lock
+    sock:          Socket
+    authenticated: bool
 
   AsyncMongo* = ref object of MongoBase ## Mongo async client object
     current: int                     ## Current (possibly) free socket to use
@@ -155,6 +167,8 @@ proc init(b: MongoBase, host: string, port: uint16) =
     b.requestID = 0
     b.queryFlags = 0
     b.replicas = @[]
+    b.username = ""
+    b.password = ""
 
 proc init(b: MongoBase, u: Uri) =
     let port = if u.port.len > 0: parseInt(u.port).uint16 else: DefaultMongoPort
@@ -167,6 +181,7 @@ proc newMongo*(host: string = "127.0.0.1", port: uint16 = DefaultMongoPort, secu
     result.new
     result.init(host, port)
     result.sock = newSocket()
+    result.authenticated = false
 
 proc newMongoWithURI*(u: Uri): Mongo =
     result.new
@@ -178,8 +193,9 @@ proc newMongoWithURI*(u: string): Mongo = newMongoWithURI(parseUri(u))
 proc newAsyncLockedSocket(): AsyncLockedSocket =
   ## Constructor for "locked" async socket
   return AsyncLockedSocket(
-    inuse: false,
-    sock: newAsyncSocket()
+    inuse:         false,
+    authenticated: false,
+    sock:          newAsyncSocket()
   )
 
 proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = DefaultMongoPort, maxConnections=16): AsyncMongo =
@@ -253,14 +269,6 @@ proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
     ## one or more shards are down.
     result = m
     m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
-
-proc connect*(m: Mongo): bool =
-    ## Connect socket to mongo server
-    try:
-        m.sock.connect(m.host, net.Port(m.port), -1)
-    except OSError:
-        return false
-    return true
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
@@ -719,20 +727,56 @@ proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
     n:   toInt32(response["n"])
   )
 
-proc newMongoDatabase*(u: Uri): Database[Mongo] =
-    let client = newMongoWithURI(u)
-    if client.connect():
-        result.new()
-        result.name = u.path.extractFileName()
-        result.client = client
+# Authentication
 
-proc newMongoDatabase*(u: string): Database[Mongo] = newMongoDatabase(parseUri(u))
+proc authenticate*(db: Database[Mongo], username: string, password: string): bool {.discardable.} =
+  ## Authenticate connection (sync): using MONGODB-CR auth method
+  if username == "" or password == "":
+    return false
+  else:
+    let nonce: string = db["$cmd"].find(B("getnonce", 1'i32)).one()["nonce"]
+    let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
+    let key = $toMd5("$#$#$#" % [nonce, username, passwordDigest])
+    let request = B(
+      "authenticate", 1'i32)(
+      "mechanism", "MONGODB-CR")(
+      "user", username)(
+      "nonce", nonce)(
+      "key", key
+    )
+    let response = db["$cmd"].find(request).one()
+    return if response["ok"] == 0: false else: true
+
+proc authenticate(am: AsyncMongo): bool =
+  ## Authenticate connection (async)
+
+proc connect*(m: Mongo): bool =
+    ## Connect socket to mongo server
+    try:
+        m.sock.connect(m.host, net.Port(m.port), -1)
+    except OSError:
+        return false
+    return true
+
+proc newMongoDatabase*(u: Uri): Database[Mongo] =
+  ## Create new Mongo sync client using URI type
+  let client = newMongoWithURI(u)
+  if client.connect():
+    result.new()
+    result.name = u.path.extractFileName()
+    result.client = client
+    result.authenticate(client.username, client.password)
+
+proc newMongoDatabase*(u: string): Database[Mongo] =
+  ## Create new Mongo sync client using URI as string
+  return newMongoDatabase(parseUri(u))
 
 proc newAsyncMongoDatabase*(u: Uri): Future[Database[AsyncMongo]] {.async.} =
-    let client = newAsyncMongoWithURI(u)
-    if await client.connect():
-        result.new()
-        result.name = u.path.extractFileName()
-        result.client = client
+  ## Create new AsyncMongo client using URI as string
+  let client = newAsyncMongoWithURI(u)
+  if await client.connect():
+    result.new()
+    result.name = u.path.extractFileName()
+    result.client = client
 
 proc newAsyncMongoDatabase*(u: string): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u))

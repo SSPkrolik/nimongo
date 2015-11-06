@@ -66,6 +66,17 @@ suite "Mongo connection error-handling operations":
     check(sm.getLastError().ok == true)
     check(waitFor(am.getLastError()).ok == true)
 
+suite "Authentication":
+
+  echo "\nAuthentication\n"
+
+  setup:
+    discard
+
+  test "[     ] [SYNC] Command: 'authenticate', method: 'plain'":
+    let authtestdb = newMongoDatabase("mongodb://test:test@localhost/testdb")
+    check($authtestdb == "testdb")
+
 suite "Mongo collection-level operations":
 
   echo "\n Mongo collection-level operations\n"

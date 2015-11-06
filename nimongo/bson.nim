@@ -332,11 +332,11 @@ proc `$`*(bs: Bson): string =
         of BsonKindJSCode:
             return "\"$#\": $#" % [bs.key, bs.valueCode] ## TODO: make valid JSON here
         of BsonKindInt32:
-            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt32]
+            return "\"$#\": $#" % [bs.key, $bs.valueInt32]
         of BsonKindTimestamp:
             return "\"$#\": {\"$$timestamp\": $#}" % [bs.key, $(cast[ptr int64](addr bs.valueTimestamp)[])]
         of BSonKindInt64:
-            return "\"$#\": \"$#\"" % [bs.key, $bs.valueInt64]
+            return "\"$#\": $#" % [bs.key, $bs.valueInt64]
         of BsonKindMinimumKey:
             return "\"$#\": {\"$$minkey\": 1}" % [bs.key]
         of BsonKindMaximumKey:
