@@ -774,8 +774,7 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
 
   let withoutProof = "c=biws,r=" & rnonce
   let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
-  var saltedPass = newString(20)
-  discard PKCS5_PBKDF2_HMAC_SHA1(passwordDigest.cstring, len(passwordDigest).uint, salt.cstring, len(salt).uint, iterations.uint, 20.uint, saltedPass.cstring)
+  var saltedPass = pbkdf2_hmac_sha1(20, passwordDigest, salt, iterations.uint32)
 
   proc stringWithSHA1Digest(d: SHA1Digest): string =
       result = newString(d.len)
