@@ -24,7 +24,7 @@ import bson
 import timeit
 
 import pbkdf2
-import sha1
+import sha1, hmac
 
 randomize()
 
@@ -757,40 +757,43 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
     "autoAuthorize", 1'i32
   )
   let responseStart = db["$cmd"].find(requestStart).one()
-  let responsePayload: string = binstr(responseStart["payload"])
+  let responsePayload = binstr(responseStart["payload"])
 
-  var parsedPayload = initTable[string, string]()
-  for item in responsePayload.split(","):
-    let key = item[0..item.find('=') - 1]
-    let val = item[item.find('=') + 1..^1]
-    parsedPayload[key] = val
+  proc parsePayload(p: string): Table[string, string] =
+    result = initTable[string, string]()
+    for item in p.split(","):
+      let e = item.find('=')
+      let key = item[0..e - 1]
+      let val = item[e + 1..^1]
+      result[key] = val
 
+  var parsedPayload = parsePayload(responsePayload)
   let iterations = parseInt(parsedPayload["i"])
-  let salt = parsedPayload["s"]
+  let salt = base64.decode(parsedPayload["s"])
   let rnonce = parsedPayload["r"]
 
   let withoutProof = "c=biws,r=" & rnonce
   let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
-  var saltedPass: string = ""
-  saltedPass.setLen(20)
-  discard PKCS5_PBKDF2_HMAC_SHA1(cast[pointer](passwordDigest.cstring), len(passwordDigest).uint, cast[pointer](salt.cstring), len(salt).uint, iterations.uint, 20.uint, cast[pointer](saltedPass.cstring))
+  var saltedPass = newString(20)
+  discard PKCS5_PBKDF2_HMAC_SHA1(passwordDigest.cstring, len(passwordDigest).uint, salt.cstring, len(salt).uint, iterations.uint, 20.uint, saltedPass.cstring)
 
-  let client_key = HMAC(EVP_sha1(), cast[pointer](saltedPass.cstring), len(saltedPass).cint, cast[pointer]("Client Key".cstring), len("Client Key").cint)
-  let stored_key = sha1.compute($client_key).toHex()
+  proc stringWithSHA1Digest(d: SHA1Digest): string =
+      result = newString(d.len)
+      copyMem(addr result[0], unsafeAddr d[0], d.len)
+
+  let client_key = hmac_sha1(saltedPass, "Client Key")
+  let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
+
   let auth_msg = join([fb, responsePayload, withoutProof], ",")
-  let client_sig = HMAC(EVP_sha1(), cast[pointer](stored_key.cstring), stored_key.len().cint, cast[pointer](auth_msg.cstring), auth_msg.len().cint)
 
-  var toEncode: seq[char] = @[]
+  let client_sig = hmac_sha1(stored_key, auth_msg)
+
+  var toEncode = newString(20)
   for i in 0..<client_key.len():
-    toEncode.add((client_key[i].int8 xor client_sig[i].int8).char)
+    toEncode[i] = cast[char](cast[uint8](client_key[i]) xor cast[uint8](client_sig[i]))
 
-  let client_proof = "p=" & base64.encode(seqToString(toEncode))
+  let client_proof = "p=" & base64.encode(toEncode)
   let client_final = join([without_proof, client_proof], ",")
-
-  let server_key = HMAC(EVP_sha1(), cast[pointer](salted_pass.cstring), len(saltedPass).cint, cast[pointer]("Server Key".cstring), len("Server Key").cint)
-  let server_sig = base64.encode(
-    $(HMAC(EVP_sha1(), cast[pointer](server_key), len(server_key).cint, cast[pointer](auth_msg.cstring), len(auth_msg).cint))
-  )
 
   let requestContinue1 = B(
     "saslContinue", 1'i32)(
@@ -799,21 +802,31 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   )
   let responseContinue1 =  db["$cmd"].find(requestContinue1).one()
 
-  let parsedPayload1 = binstr(responseContinue1["payload"])
-  discard """
-  if not compare_digest(parsed[b'v'], server_sig):
-      raise OperationFailure("Server returned an invalid signature.")
+  let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
+  let server_sig = base64.encode(stringWithSHA1Digest(hmac_sha1(server_key, auth_msg)))
+
+  parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
+
+  proc compare_digest(a, b: string): bool =
+    var res : uint8
+    for i in 0 ..< a.len:
+      res = res or (cast[uint8](a[i]) xor cast[uint8](b[i]))
+    result = res == 0
+
+  if not compare_digest(parsedPayload["v"], server_sig):
+      raise newException(Exception, "Server returned an invalid signature.")
 
   # Depending on how it's configured, Cyrus SASL (which the server uses)
   # requires a third empty challenge.
-  if not res['done']:
-      cmd = SON([('saslContinue', 1),
-                 ('conversationId', res['conversationId']),
-                 ('payload', Binary(b''))])
-      res = sock_info.command(source, cmd)
-      if not res['done']:
-          raise OperationFailure('SASL conversation failed to complete.')
-  """
+  if not responseContinue1["done"].toBool():
+      let requestContinue2 = B(
+        "saslContinue", 1'i32)(
+        "conversationId", responseContinue1["conversationId"])(
+        "payload", ""
+      )
+      let responseContinue2 = db["$cmd"].find(requestContinue2).one()
+      if not responseContinue2["done"].toBool():
+          raise newException(Exception, "SASL conversation failed to complete.")
   return true
 
 proc authenticate*(db: Database[Mongo], username: string, password: string): bool {.discardable.} =
@@ -853,7 +866,7 @@ proc newMongoDatabase*(u: Uri): Database[Mongo] =
     result.new()
     result.name = u.path.extractFileName()
     result.client = client
-    result.authenticate(client.username, client.password)
+    result.authenticateScramSha1(client.username, client.password)
 
 proc newMongoDatabase*(u: string): Database[Mongo] =
   ## Create new Mongo sync client using URI as string
