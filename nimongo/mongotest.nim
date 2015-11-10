@@ -80,7 +80,7 @@ suite "Authentication":
 
 suite "User Management":
 
-  echo "\nUser management"
+  echo "\nUser management\n"
 
   setup:
     discard
@@ -88,6 +88,14 @@ suite "User Management":
   test "[ASYNC][SYNC] Command: 'createUser' without roles and custom data":
     check(sdb.createUser("testuser", "testpass"))
     check(waitFor(adb.createUser("testuser", "testpass")))
+    check(sdb.dropUser("testuser"))
+    check(waitFor(adb.dropUser("testuser")))
+
+  test "[ASYNC][SYNC] Command: 'dropUser'":
+    check(sdb.createUser("testuser2", "testpass2"))
+    check(sdb.dropUser("testuser2"))
+    check(waitFor(adb.createUser("testuser2", "testpass2")))
+    check(waitFor(adb.dropUser("testuser2")))
 
 suite "Mongo collection-level operations":
 

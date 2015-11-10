@@ -175,10 +175,10 @@ This table represents MongoDB features and their implementation status within
 |            | GSSAPI (Kerberos)|:red_circle:       | :red_circle:       | |
 |            | PLAIN (LDAP SASL)|:red_circle:       | :red_circle:       | |
 |            | logout          | :red_circle:       | :red_circle:       | |
-|User Management |             | __1__ / __7__      | __1__ / __7__      | |
+|User Management |             | __2__ / __7__      | __2__ / __7__      | |
 |            | Create User     | :white_check_mark: | :white_check_mark: | |
 |            | Update User     | :red_circle:       | :red_circle:       | |
-|            | Drop User       | :red_circle:       | :red_circle:       | |
+|            | Drop User       | :white_check_mark: | :white_check_mark: | |
 |            | Drop all users  | :red_circle:       | :red_circle:       | |
 |            | Grant roles     | :red_circle:       | :red_circle:       | |
 |            | Revoke roles    | :red_circle:       | :red_circle:       | |
