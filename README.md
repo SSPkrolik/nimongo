@@ -167,16 +167,16 @@ This table represents MongoDB features and their implementation status within
 |            | FindAndModify   | :red_circle:       | :red_circle:       | |
 |            | parallelCollectionScan | :red_circle:| :red_circle:       | |
 |            | getLastError    | :white_check_mark: | :white_check_mark: | |
-|Authentication |              | __0__ / __7__      | __0__ / __7__      | |
+|Authentication |              | __1__ / __7__      | __1__ / __7__      | |
 |            | authenticate    | :red_circle:       | :red_circle:       | |
 |            | SCRAM-SHA-1     | :white_check_mark: | :red_circle:       | |
 |            | MONGODB-CR      | :red_circle:       | :red_circle:       | |
 |            | MONGODB-X509    | :red_circle:       | :red_circle:       | |
-|            | GSSAPI (Kerberos)| :red_circle:      | :red_circle:       | |
-|            | PLAIN (LDAP SASL)| :red_circle:      | :red_circle:       | |
+|            | GSSAPI (Kerberos)|:red_circle:       | :red_circle:       | |
+|            | PLAIN (LDAP SASL)|:red_circle:       | :red_circle:       | |
 |            | logout          | :red_circle:       | :red_circle:       | |
-|User Management |             | __0__ / __7__      | __0__ / __7__      | |
-|            | Create User     | :red_circle:       | :red_circle:       | |
+|User Management |             | __1__ / __7__      | __1__ / __7__      | |
+|            | Create User     | :white_check_mark: | :white_check_mark: | |
 |            | Update User     | :red_circle:       | :red_circle:       | |
 |            | Drop User       | :red_circle:       | :red_circle:       | |
 |            | Drop all users  | :red_circle:       | :red_circle:       | |

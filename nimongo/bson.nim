@@ -427,9 +427,14 @@ proc geo*(loc: GeoPoint): Bson =
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
   result = bs
-  var value: Bson = val
-  value.key = key
-  result.valueDocument.add(value)
+  if not isNil(val):
+    var value: Bson = val
+    value.key = key
+    result.valueDocument.add(value)
+  else:
+    var value: Bson = null()
+    value.key = key
+    result.valueDocument.add(value)
 
 proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     ## Add array field to bson object

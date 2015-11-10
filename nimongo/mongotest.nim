@@ -73,10 +73,21 @@ suite "Authentication":
   setup:
     discard
 
-  test "[     ] [SYNC] Command: 'authenticate', method: 'plain'":
+  test "[     ] [SYNC] Command: 'authenticate', method: 'SCRAM-SHA-1'":
     let authtestdb = newMongoDatabase("mongodb://test:test@localhost:8081/testdb")
     check($authtestdb == "testdb")
     authtestdb[TestSyncCol].insert(B("data", "auth"))
+
+suite "User Management":
+
+  echo "\nUser management"
+
+  setup:
+    discard
+
+  test "[ASYNC][SYNC] Command: 'createUser' without roles and custom data":
+    check(sdb.createUser("testuser", "testpass"))
+    check(waitFor(adb.createUser("testuser", "testpass")))
 
 suite "Mongo collection-level operations":
 

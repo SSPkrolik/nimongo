@@ -734,6 +734,20 @@ proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
     n:   toInt32(response["n"])
   )
 
+# User management
+
+proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): bool =
+  ## Create new user for the specified database
+  let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 0'i32)("j", 0'i32))
+  let response = db["$cmd"].find(createUserRequest).one()
+  return (response["ok"] == 1) or (toInt32(response["code"]) == 11000)
+
+proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): Future[bool] {.async.} =
+  ## Create new user for the specified database via async client
+  let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 0'i32)("j", 0'i32))
+  let response = await db["$cmd"].find(createUserRequest).one()
+  return (response["ok"] == 1) or (toInt32(response["code"]) == 11000)
+
 # Authentication
 
 proc seqToString(s: seq[char]): string =
@@ -846,9 +860,6 @@ proc authenticate*(db: Database[Mongo], username: string, password: string): boo
   )
   let response = db["$cmd"].find(request).one()
   return if response["ok"] == 0: false else: true
-
-proc authenticate(am: AsyncMongo): bool =
-  ## Authenticate connection (async)
 
 proc connect*(m: Mongo): bool =
     ## Connect socket to mongo server
