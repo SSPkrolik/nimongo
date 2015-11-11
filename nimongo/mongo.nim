@@ -630,8 +630,10 @@ proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
 proc listCollections*(db: Database[Mongo], filter: Bson = initBsonDocument()): seq[string] =
   ## List collections inside specified database
   let response = db["$cmd"].find(B("listCollections", 1'i32)).one()
-  if response["ok"] == 0.0:
-    return @[]
+  result = @[]
+  if response["ok"] == 1.0:
+    for col in response["cursor"]["firstBatch"]:
+      result.add(col["name"])
 
 proc drop*(db: Database[Mongo]): bool =
   ## Drop database from server

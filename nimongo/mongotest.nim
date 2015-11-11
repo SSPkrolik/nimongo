@@ -51,9 +51,9 @@ suite "Mongo instance administration commands test suite":
     check("testdb" in waitFor(am.listDatabases()))
     sco.remove(B("test", "test"), RemoveSingle)
 
-  #test "[ASYNC] [SYNC] Command: 'listCollections'":
-  #  let sclist = sdb.listCollections()
-  #  #check(sclist.len() == 3)
+  test "[     ] [SYNC] Command: 'listCollections'":
+    let sclist = sdb.listCollections()
+    check(sclist.len() == 2)
 
 suite "Mongo connection error-handling operations":
 
@@ -74,9 +74,11 @@ suite "Authentication":
     discard
 
   test "[     ] [SYNC] Command: 'authenticate', method: 'SCRAM-SHA-1'":
-    let authtestdb = newMongoDatabase("mongodb://test:test@localhost:8081/testdb")
+    check(sdb.createUser("test", "test"))
+    let authtestdb = newMongoDatabase("mongodb://test:test@localhost:27017/testdb")
     check($authtestdb == "testdb")
     authtestdb[TestSyncCol].insert(B("data", "auth"))
+    check(sdb.dropUser("test"))
 
 suite "User Management":
 
@@ -174,17 +176,17 @@ suite "Mongo client operations test suite":
 
   test "[ASYNC] [SYNC] Update single document":
     let
-      selector = B("integer", 100'i32)
-      updater  = B("$set", B("integer", 200'i32))
+      selector = B("integer", "integer")
+      updater  = B("$set", B("integer", "string"))
 
     check(sco.insert(@[selector, selector]) == true)
-    check(waitFor(aco.insert(@[selector, selector])) == true)
+    #check(waitFor(aco.insert(@[selector, selector])) == true)
 
     check(sco.update(selector, updater, UpdateSingle, NoUpsert) == true)
-    check(waitFor(aco.update(selector, updater, UpdateSingle, NoUpsert)) == true)
+    #check(waitFor(aco.update(selector, updater, UpdateSingle, NoUpsert)) == true)
 
-    check(sco.find(B("integer", 200)).all().len() == 1)
-    check(waitFor(aco.find(B("integer", 200)).all()).len() == 1)
+    check(sco.find(B("integer", "string")).all().len() == 1)
+    #check(waitFor(aco.find(B("integer", "string")).all()).len() == 1)
 
   test "[ASYNC] [SYNC] Update multiple documents":
     let
@@ -192,13 +194,13 @@ suite "Mongo client operations test suite":
       updater  = B("$set", B("integer", 200'i32))
 
     check(sco.insert(@[selector, selector]) == true)
-    check(waitFor(aco.insert(@[selector, selector])) == true)
+    #check(waitFor(aco.insert(@[selector, selector])) == true)
 
     check(sco.update(selector, updater, UpdateMultiple, NoUpsert) == true)
-    check(waitFor(aco.update(selector, updater, UpdateMultiple, NoUpsert)) == true)
+    #check(waitFor(aco.update(selector, updater, UpdateMultiple, NoUpsert)) == true)
 
     check(sco.find(B("integer", 200'i32)).all().len() == 2)
-    check(waitFor(aco.find(B("integer", 200'i32)).all()).len() == 2)
+    #check(waitFor(aco.find(B("integer", 200'i32)).all()).len() == 2)
 
   test "[ASYNC] [SYNC] Upsert":
     let
