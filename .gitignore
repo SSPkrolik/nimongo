@@ -2,5 +2,6 @@ nimcache
 mongo
 bson
 mongotest
+bsontest
 profile_results.txt
 
