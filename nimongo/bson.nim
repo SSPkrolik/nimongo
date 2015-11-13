@@ -518,6 +518,9 @@ proc `[]=`*(bs: Bson, key: string, value: Bson) =
         bs.valueDocument[i] = value
         bs.valueDocument[i].key = key
         return
+    var newValue: Bson = value
+    newValue.key = key
+    bs.valueDocument.add(newValue)
   else:
     raise new(Exception)
 
@@ -532,8 +535,6 @@ proc `[]=`*(bs: Bson, key: int, value: Bson) =
   ## Modify Bson array element
   if bs.kind == BsonKindArray:
     bs.valueArray[key] = value
-  else:
-    raise new(Exception)
 
 iterator items*(bs: Bson): Bson =
   ## Iterate overt Bson document or array fields

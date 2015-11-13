@@ -45,5 +45,7 @@ suite "BSON serializer/deserializer test suite":
     check(doc["int32"] == 2'i32)
     doc["array"][0] = 10'i32
     check(doc["array"][0] == 10'i32)
+    doc["newfield"] = "newvalue"
+    check(doc["newfield"] == "newvalue")
 
 echo ""
