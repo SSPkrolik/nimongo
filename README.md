@@ -63,7 +63,15 @@ let doc = B("name", "John")
 collection.insert(doc)
 
 ## Update [single] document
-collection.update(B("name", "John"), B("$set", B("surname", "Smith")))
+collection.update(
+  %*{
+    "name": "John"
+  }, %*{
+    "$set": {
+      "surname": "Smith"
+    }
+  }
+)
 
 ## Delete multiple documents
 collection.remove(B("name", "John"), RemoveMultiple)
