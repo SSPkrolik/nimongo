@@ -1,5 +1,6 @@
 import algorithm
 import base64
+import macros
 import marshal
 import md5
 import oids
@@ -347,12 +348,18 @@ proc `$`*(bs: Bson): string =
     return stringify(bs)
 
 proc initBsonDocument*(): Bson =
-    ## Create new top-level Bson document
-    result = Bson(
-        key: "",
-        kind: BsonKindDocument,
-        valueDocument: newSeq[Bson]()
-    )
+  ## Create new top-level Bson document
+  result.new
+  result.key = ""
+  result.kind = BsonKindDocument
+  result.valueDocument = @[]
+
+proc newBsonDocument*(): Bson =
+  ## Create new empty Bson document
+  result.new
+  result.key = ""
+  result.kind = BsonKindDocument
+  result.valueDocument = @[]
 
 proc initBsonArray*(): Bson =
     ## Create new Bson array
@@ -364,6 +371,39 @@ proc initBsonArray*(): Bson =
 
 template B*: expr =
     initBsonDocument()
+
+proc toBson(x: NimNode, child: NimNode = nil): NimNode =
+  ## Convert NimNode into BSON document
+  case x.kind
+  of nnkCurly:
+    if x.len() == 0:
+      var call = newNimNode(nnkCall)
+      call.add(ident("initBsonDocument"))
+      return call
+  of nnkTableConstr:
+    var call = newNimNode(nnkCall)
+    call.add(ident("initBsonDocument"))
+    for i in 0 .. <x.len():
+      if x[i].kind == nnkExprColonExpr:
+        var parentCall = newNimNode(nnkCall)
+        parentCall.add(call)
+        call = toBson(x[i], parentCall)
+    return call
+  of nnkExprColonExpr:
+    child.add(x[0])
+    if x[1].kind == nnkBracket:
+      child.add(prefix(x[1], "@"))
+    elif x[1].kind == nnkTableConstr:
+      child.add(toBson(x[1]))
+    else:
+      child.add(x[1])
+    return child
+  else:
+    return x
+
+macro `%*`*(x: expr): expr =
+  ## Perform dict-like structure conversion into bson
+  result = toBson(x)
 
 template B*(key: string, val: Bson): expr =  ## Shortcut for _initBsonDocument
     initBsonDocument()(key, val)
@@ -470,12 +510,30 @@ proc `[]`*(bs: Bson, key: string): Bson =
     else:
         raise new(Exception)
 
+proc `[]=`*(bs: Bson, key: string, value: Bson) =
+  ## Modify Bson document field
+  if bs.kind == BsonKindDocument:
+    for i in 0 .. < bs.valueDocument.len():
+      if bs.valueDocument[i].key == key:
+        bs.valueDocument[i] = value
+        bs.valueDocument[i].key = key
+        return
+  else:
+    raise new(Exception)
+
 proc `[]`*(bs: Bson, key: int): Bson =
-    ## Get Bson array item by index
-    if bs.kind == BsonKindArray:
-        return bs.valueArray[key]
-    else:
-        raise new(Exception)
+  ## Get Bson array item by index
+  if bs.kind == BsonKindArray:
+    return bs.valueArray[key]
+  else:
+    raise new(Exception)
+
+proc `[]=`*(bs: Bson, key: int, value: Bson) =
+  ## Modify Bson array element
+  if bs.kind == BsonKindArray:
+    bs.valueArray[key] = value
+  else:
+    raise new(Exception)
 
 iterator items*(bs: Bson): Bson =
   ## Iterate overt Bson document or array fields
