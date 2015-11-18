@@ -182,8 +182,8 @@ suite "Mongo client operations test suite":
     check(sco.insert(@[selector, selector]) == true)
     check(waitFor(aco.insert(@[selector, selector])) == true)
 
-    check(sco.update(selector, updater, UpdateSingle, NoUpsert) == true)
-    check(waitFor(aco.update(selector, updater, UpdateSingle, NoUpsert)) == true)
+    check(sco.update(selector, updater, false, false) == true)
+    check(waitFor(aco.update(selector, updater, false, false)) == true)
 
     check(sco.find(%*{"integer": "string"}).all().len() == 1)
     check(waitFor(aco.find(%*{"integer": "string"}).all()).len() == 1)
@@ -196,8 +196,8 @@ suite "Mongo client operations test suite":
     check(sco.insert(@[selector, selector]) == true)
     check(waitFor(aco.insert(@[selector, selector])) == true)
 
-    check(sco.update(selector, updater, UpdateMultiple, NoUpsert) == true)
-    check(waitFor(aco.update(selector, updater, UpdateMultiple, NoUpsert)) == true)
+    check(sco.update(selector, updater, true, false) == true)
+    check(waitFor(aco.update(selector, updater, true, false)) == true)
 
     check(sco.find(%*{"integer": 200'i32}).all().len() == 2)
     check(waitFor(aco.find(%*{"integer": 200'i32}).all()).len() == 2)
@@ -207,8 +207,8 @@ suite "Mongo client operations test suite":
       selector = %*{"integer": 100'i64}
       updater  = %*{"$set": {"integer": 200'i64}}
 
-    check(sco.update(selector, updater, UpdateSingle, Upsert) == true)
-    check(waitFor(aco.update(selector, updater, UpdateSingle, Upsert)) == true)
+    check(sco.update(selector, updater, false, true) == true)
+    check(waitFor(aco.update(selector, updater, false, true)) == true)
 
     check(sco.find(%*{"integer": 200}).all().len() == 1)
     check(waitFor(aco.find(%*{"integer": 200}).all()).len() == 1)

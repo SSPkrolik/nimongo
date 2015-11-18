@@ -16,7 +16,7 @@ import strutils
 import tables
 import typetraits
 import times
-import json
+#import json
 import uri
 import os
 
@@ -391,44 +391,6 @@ proc remove*(c: Collection[AsyncMongo], selector: Bson, mode: RemoveKind): Futur
     return false
   return true
 
-proc update*(c: Collection[Mongo], selector: Bson, update: Bson, mode: UpdateKind, upsert: UpsertKind): bool {.discardable.} =
-  ## Update MongoDB document[s]
-  {.locks: [c.client.requestLock].}:
-    let
-      ssel = selector.bytes()
-      supd = update.bytes()
-      msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
-    var flags: int32 = 0
-
-    if mode == UpdateMultiple:
-      flags = flags or (1'i32 shl 1)
-    if upsert == Upsert:
-      flags = flags or (1'i32)
-
-    return c.client.sock.trySend(msgHeader & buildMessageUpdate(flags, $c) & ssel & supd)
-
-proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, mode: UpdateKind, upsert: UpsertKind): Future[bool] {.async.} =
-  ## Update MongoDB document[s] via async connection
-  var ls = await c.client.next()
-  let
-    ssel = selector.bytes()
-    supd = update.bytes()
-    msgHeader = buildMessageHeader(int32(25 + len($c) + ssel.len() + supd.len()), c.client.nextRequestId(), 0, OP_UPDATE)
-  var flags: int32 = 0
-
-  if mode == UpdateMultiple:
-    flags = flags or (1'i32 shl 1)
-  if upsert == Upsert:
-    flags = flags or (1'i32)
-
-  try:
-    ls.inuse = true
-    await ls.sock.send(msgHeader & buildMessageUpdate(flags, $c) & ssel & supd)
-    ls.inuse = false
-  except OSError:
-    return false
-  return true
-
 proc find*[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
   ## Create lazy query object to MongoDB that can be actually run
   ## by one of the Find object procedures: `one()` or `all()`.
@@ -735,6 +697,29 @@ proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
     err: if response["err"].kind == BsonKindNull: "" else: response["err"],
     n:   toInt32(response["n"])
   )
+
+# Update API
+
+proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, upsert: bool): bool {.discardable.} =
+  ## Update MongoDB document[s]
+  let request = %*{
+    "update": c.name,
+    "updates": [%*{"q": selector, "u": update, "upsert": upsert, "multi": multi}],
+    "ordered": true
+  }
+  {.locks: [c.client.requestLock].}:
+    let response = c.db["$cmd"].find(request).one()
+    return response["ok"].toInt32() == 1'i32
+
+proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: bool, upsert: bool): Future[bool] {.async.} =
+  ## Update MongoDB document[s] via async connection
+  let request = %*{
+    "update": c.name,
+    "updates": [%*{"q": selector, "u": update, "upsert": upsert, "multi": multi}],
+    "ordered": true
+  }
+  let response = await c.db["$cmd"].find(request).one()
+  return response["ok"].toInt32() == 1'i32
 
 # User management
 
