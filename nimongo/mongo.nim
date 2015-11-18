@@ -719,7 +719,7 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
     "ordered": true
   }
   let response = await c.db["$cmd"].find(request).one()
-  return response["ok"].toInt32() == 1'i32
+  return response["ok"] == 1'i32
 
 # User management
 
@@ -727,25 +727,25 @@ proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData:
   ## Create new user for the specified database
   let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
   let response = db["$cmd"].find(createUserRequest).one()
-  return true
+  return response["ok"] == 1.0'f64
 
 proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): Future[bool] {.async.} =
   ## Create new user for the specified database via async client
   let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
   let response = await db["$cmd"].find(createUserRequest).one()
-  return true
+  return response["ok"] == 1.0'f64
 
 proc dropUser*(db: Database[Mongo], username: string): bool =
   ## Drop user from the db
   let dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
   let response = db["$cmd"].find(dropUserRequest).one()
-  return true
+  return response["ok"] == 1.0'f64
 
 proc dropUser*(db: Database[AsyncMongo], username: string): Future[bool] {.async.} =
   ## Drop user from the db via async client
   let dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
   let response = await db["$cmd"].find(dropUserRequest).one()
-  return true
+  return response["ok"] == 1.0'f64
 
 # Authentication
 

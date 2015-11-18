@@ -89,9 +89,9 @@ suite "User Management":
 
   test "[ASYNC][SYNC] Command: 'createUser' without roles and custom data":
     check(sdb.createUser("testuser", "testpass"))
-    check(waitFor(adb.createUser("testuser", "testpass")))
+    check(waitFor(adb.createUser("testuser2", "testpass2")))
     check(sdb.dropUser("testuser"))
-    check(waitFor(adb.dropUser("testuser")))
+    check(waitFor(adb.dropUser("testuser2")))
 
   test "[ASYNC][SYNC] Command: 'dropUser'":
     check(sdb.createUser("testuser2", "testpass2"))
