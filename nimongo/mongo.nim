@@ -80,6 +80,13 @@ type
     name:   string
     client: T
 
+  CollectionInfo* = object  ## Collection information (for manual creation)
+    disableIdIndex*: bool
+    forceIdIndex*: bool
+    capped: bool
+    maxBytes: int
+    maxDocs: int
+
   Collection*[T] = ref object of MongoBase ## MongoDB collection object
     name:   string
     db:     Database[T]
@@ -99,6 +106,9 @@ type
     ok*: bool
     n*: int
     err*: string
+
+proc initCollectionInfo*(): CollectionInfo =
+  ## CollectionInfo constructor
 
 converter toBool*(sr: StatusReply): bool = sr.ok
   ## If StatusReply.ok field is true = then StatusReply is considered
@@ -496,6 +506,12 @@ proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
       result.add(db["name"].toString())
   else:
     raise new(Exception)
+
+proc create*(db: Database[Mongo], name: string): StatusReply =
+  ## Create collection inside database via sync connection
+
+proc create*(db: Database[AsyncMongo], name: string): StatusReply =
+  ## Create collection inside database via async connection
 
 proc listCollections*(db: Database[Mongo], filter: Bson = %*{}): seq[string] =
   ## List collections inside specified database
