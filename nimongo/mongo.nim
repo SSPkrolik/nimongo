@@ -515,6 +515,34 @@ proc listCollections*(db: Database[AsyncMongo], filter: Bson = %*{}): Future[seq
     for col in response["cursor"]["firstBatch"]:
       result.add(col["name"])
 
+proc rename*(c: Collection[Mongo], newName: string, dropTarget: bool = false): StatusReply =
+  ## Rename collection
+  let
+    request = %*{
+      "renameCollection": $c,
+      "to": "$#.$#" % [c.db.name, newName],
+      "dropTarget": dropTarget
+    }
+    response = c.db.client["admin"]["$cmd"].find(request).one()
+  c.name = newName
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64
+  )
+
+proc rename*(c: Collection[AsyncMongo], newName: string, dropTarget: bool = false): Future[StatusReply] {.async.} =
+  ## Rename collection via async connection
+  let
+    request = %*{
+      "renameCollection": $c,
+      "to": "$#.$#" % [c.db.name, newName],
+      "dropTarget": dropTarget
+    }
+    response = await c.db.client["admin"]["$cmd"].find(request).one()
+  c.name = newName
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64
+  )
+
 proc drop*(db: Database[Mongo]): bool =
   ## Drop database from server
   let response = db["$cmd"].find(%*{"dropDatabase": 1}).one()

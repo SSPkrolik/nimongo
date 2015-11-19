@@ -211,7 +211,7 @@ This table represents MongoDB features and their implementation status within
 |            | List databases  | :white_check_mark: | :white_check_mark: | |
 |            | Drop database   | :white_check_mark: | :white_check_mark: | |
 |            | List collections| :white_check_mark: | :white_check_mark: | |
-|            | Rename collection|:red_circle:       | :red_circle:       | |
+|            | Rename collection|:white_check_mark: | :white_check_mark: | |
 |            | Drop collection | :white_check_mark: | :white_check_mark: | |
 |            | Create collection|:red_circle:       | :red_circle:       | |
 |Diagnostic  |                 | __0__ / __0__      | __0__ / __0__      | |

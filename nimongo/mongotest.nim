@@ -49,12 +49,22 @@ suite "Mongo instance administration commands test suite":
     check("testdb" in waitFor(am.listDatabases()))
     sco.remove(%*{"test": "test"}, limit=1)
 
-  test "[     ] [SYNC] Command: 'listCollections'":
+  test "[ASYNC] [SYNC] Command: 'listCollections'":
     let sclist = sdb.listCollections()
     check(sclist.len() == 2)
 
     let aclist = waitFor(adb.listCollections())
     check(aclist.len() == 2)
+
+  test "[ASYNC] [SYNC] Command: 'renameCollection'":
+    check(sco.insert(%*{}))
+    check(waitFor(aco.insert(%*{})))
+
+    check(sco.rename("syncnew"))
+    check(waitFor(aco.rename("asyncnew")))
+
+    check(sco.rename("sync"))
+    check(waitFor(aco.rename("async")))
 
 suite "Mongo connection error-handling operations":
 
