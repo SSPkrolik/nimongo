@@ -57,27 +57,35 @@ let connectResult = m.connect()
 let collection = m["db"]["collectionName"]
 
 ## Create new bson document
-let doc = %*{"name": "John"}
+let doc = %*{
+  "name": "John"
+}
 
 ## Insert document into DB
 collection.insert(doc)
 
 ## Update [single] document
-collection.update(
-  %*{
-    "name": "John"
-  }, %*{
-    "$set": {
-      "surname": "Smith"
-    }
+let reply = collection.update(%*{
+  "name": "John"
+}, %*{
+  "$set": {
+    "surname": "Smith"
   }
-)
+})
+
+# Check command execution status
+if reply.ok:
+  echo "Modified a document."
 
 ## Delete multiple documents
-collection.remove(%*{"name": "John"}, RemoveMultiple)
+let removeResult = collection.remove(%*{"name": "John"})
+
+## Check how many documents were removed
+if removeResult.ok:
+  echo "Removed ", removeResult.n, " documents."
 
 ## Delete single document
-collection.remove(%{"name": "John"}, RemoveSingle)
+collection.remove(%{"name": "John"}, limit=1)
 
 ## Fetch one document from DB returning only one field: "name".
 let fetched = collection.find(%*{"name": "John"}, @["name"]).one()
@@ -87,7 +95,7 @@ let documents = collection.find(%*{"name": "John"}).all()
 
 ## Fetch all matching documents as a iterator
 for document in collection.find(%*{"name": "John"}).items():
-    echo document
+  echo document
 ```
 
 Usage of async client
@@ -120,16 +128,16 @@ waitFor(m.insert(B("hello-async", "victory")))
 
 ## Inserting multiple documents into MongoDB
 let
-  doc1 = B("doc1", 15)
-  doc2 = B("doc2", "string")
+  doc1 = %*{"doc1": 15}
+  doc2 = %*{"doc2": "string"}
 
 waitFor(m.insert(@[doc1, doc2]))
 
 ## Removing single document from MongoDB
-waitFor(m.remove(B("doc1", 15), RemoveSingle))
+waitFor(m.remove(B("doc1", 15), limit=1))
 
 ## Removing multiple documents from MongoDB
-waitFor(m.remove(B("doc1", 15), RemoveMultiple))
+waitFor(m.remove(B("doc1", 15)))
 ```
 
 Currently Supported Features
