@@ -16,7 +16,6 @@ import strutils
 import tables
 import typetraits
 import times
-#import json
 import uri
 import os
 
@@ -28,41 +27,22 @@ import sha1, hmac
 
 randomize()
 
-type OperationKind = enum    ## Type of operation performed by MongoDB
-  # OP_REPLY        =    1'i32 ##
-  OP_UPDATE         = 2001'i32 ##
-  OP_INSERT         = 2002'i32 ## Insert new document into MongoDB
-  OP_QUERY          = 2004'i32 ##
-  # OP_GET_MORE     = 2005'i32 ##
-  OP_DELETE         = 2006'i32 ## Remove documents from MongoDB
-  # OP_KILL_CURSORS = 2007'i32 ##
-
-type RemoveKind* = enum ## Type of remove operation
-  RemoveSingle          ## Remove single document
-  RemoveMultiple        ## Remove multiple documents
-
-type UpdateKind* = enum ## Type of update operation
-  UpdateSingle          ## Update single document
-  UpdateMultiple        ## Update multiple document
-
-type UpsertKind* = enum ## Indicates if need to make upsert
-  Upsert                ## Upsert allowed
-  NoUpsert              ## Upsert disallowed
-
 type AuthenticationMethod* = enum ## What type of authentication we use
   NoAuth
-  ScramSHA1
+  ScramSHA1                       ## +
   MongodbCr
   MongodbX509
   Kerberos                        ## Enterprise-only
   Ldap                            ## Enterprise-only
 
-type ClientKind* = enum
+type ClientKind* = enum           ## Kind of client communication type
   ClientKindBase  = 0
   ClientKindSync  = 1
   ClientKindAsync = 2
 
 const
+  OP_QUERY = 2004'i32           ## OP_QUERY operation code (wire protocol)
+
   TailableCursor  = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
   SlaveOk         = 1'i32 shl 2 ## Allow to query replica set slaves
   NoCursorTimeout = 1'i32 shl 4 ##
@@ -70,18 +50,10 @@ const
   Exhaust         = 1'i32 shl 6 ##
   Partial         = 1'i32 shl 7 ## Get info only from running shards
 
-const DefaultMongoPort = 27017'u16
-#  const
-#    CursorNotFound     = 1'i32       ## Invalid cursor id in Get More operation
-#    QueryFailure       = 1'i32 shl 1 ## $err field document is returned
-#    AwaitCapable       = 1'i32 shl 3 ## Set when server supports AwaitCapable
-
-converter toInt32*(ok: OperationKind): int32 =
-  ## Convert OperationKind ot int32
-  return ok.int32
+  DefaultMongoPort* = 27017'u16  ## Default MongoDB IP Port
 
 type
-  MongoBase* = ref object of RootObj    ## Base Mongo client
+  MongoBase* = ref object of RootObj ## Base for Mongo clients
     requestId:  int32
     host:       string
     port:       uint16
@@ -90,15 +62,15 @@ type
     password:   string
     replicas:   seq[tuple[host: string, port: uint16]]
 
-  AsyncLockedSocket = object
-    inuse:         bool
-    authenticated: bool
-    sock:          AsyncSocket
-
   Mongo* = ref object of MongoBase      ## Mongo client object
     requestLock:   Lock
     sock:          Socket
     authenticated: bool
+
+  AsyncLockedSocket = object
+    inuse:         bool
+    authenticated: bool
+    sock:          AsyncSocket
 
   AsyncMongo* = ref object of MongoBase ## Mongo async client object
     current: int                     ## Current (possibly) free socket to use
@@ -126,17 +98,17 @@ type
   StatusReply* = object  ## Database Reply
     ok*: bool
     n*: int
-
-  MongoError* = object
-    ok*:  bool
     err*: string
-    n*:   int
 
 converter toBool*(sr: StatusReply): bool = sr.ok
   ## If StatusReply.ok field is true = then StatusReply is considered
   ## to be successful. It is a convinience wrapper for the situation
   ## when we are not interested in no more status information than
   ## just a flag of success.
+
+# ===================== #
+# Write Concern support #
+# ===================== #
 
 let writeConcernDefault*: Bson = %*{"w": 1, "j": false}
   ## Default MongoDB write concern
@@ -150,7 +122,6 @@ proc writeConcern*(w: string, j: bool, wtimeout: int = 0): Bson =
   if wtimeout > 0:
     result = result("wtimeout", wtimeout)
   return result
-
 
 # === Private APIs === #
 
@@ -170,21 +141,9 @@ proc newCursor[T](c: Collection[T]): Cursor[T] =
     result.nskip = 0
     result.nlimit = 0
 
-proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32, opCode: OperationKind): string =
+proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32): string =
     ## Build Mongo message header as a series of bytes
-    result = int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(opCode)
-
-proc buildMessageInsert(flags: int32, fullCollectionName: string): string =
-    ## Build Mongo insert messsage
-    return int32ToBytes(flags) & fullCollectionName & char(0)
-
-proc buildMessageDelete(flags: int32, fullCollectionName: string): string =
-    ## Build Mongo delete message
-    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
-
-proc buildMessageUpdate(flags: int32, fullCollectionName: string): string =
-    ## Build Mongo update message
-    return int32ToBytes(0'i32) & fullCollectionName & char(0) & int32ToBytes(flags)
+    result = int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(OP_QUERY)
 
 proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: int32, numberToReturn: int32): string =
     ## Build Mongo query message
@@ -339,29 +298,6 @@ proc `$`*(c: Collection): string =
     ## String representation of collection name
     return c.db.name & "." & c.name
 
-proc remove*(c: Collection[Mongo], selector: Bson, mode: RemoveKind): bool {.discardable.} =
-  ## Delete document[s] from MongoDB
-  {.locks: [c.client.requestLock].}:
-    let
-      sdoc = selector.bytes()
-      msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
-
-    return c.client.sock.trySend(msgHeader & buildMessageDelete(if mode == RemoveMultiple: 0 else: 1, $c) & sdoc)
-
-proc remove*(c: Collection[AsyncMongo], selector: Bson, mode: RemoveKind): Future[bool] {.async.} =
-  ## Delete document[s] from MongoDB via asyn connection
-  var ls = await c.client.next()
-  let
-    sdoc = selector.bytes()
-    msgHeader = buildMessageHeader(int32(25 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_DELETE)
-  try:
-    ls.inuse = true
-    await ls.sock.send(msgHeader & buildMessageDelete(if mode == RemoveMultiple: 0 else: 1, $c) & sdoc)
-    ls.inuse = false
-  except OSError:
-    return false
-  return true
-
 proc find*[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
   ## Create lazy query object to MongoDB that can be actually run
   ## by one of the Find object procedures: `one()` or `all()`.
@@ -422,7 +358,8 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
           bfields = bfields(field, 1'i32)
   let squery = f.query.bytes()
   let sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
-  let msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0, OP_QUERY)
+
+  let msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0)
 
   result = msgHeader & buildMessageQuery(0, $(f.collection), numberToSkip , numberToReturn) & squery & sfields
 
@@ -649,24 +586,22 @@ proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} 
     for item in va.items():
       result.add(item.toString())
 
-# Error processing
-
-proc getLastError*(m: Mongo): MongoError =
+proc getLastError*(m: Mongo): StatusReply =
   ## Get last error happened in current connection
   let response = m["admin"]["$cmd"].find(B("getLastError", 1'i32)).one()
-  return MongoError(
-    ok:  if response["ok"].kind == BsonKindInt32: response["ok"] == 1 else: response["ok"] == 1.0,
-    err: if response["err"].kind == BsonKindNull: "" else: response["err"],
-    n:   toInt32(response["n"])
+  return StatusReply(
+    ok:  response["ok"] == 1.0'f64,
+    n:   response["n"].toInt32(),
+    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: ""
   )
 
-proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
+proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
   ## Get last error happened in current connection
   let response = await am["admin"]["$cmd"].find(B("getLastError", 1'i32)).one()
-  return MongoError(
-    ok:  if response["ok"].kind == BsonKindInt32: response["ok"] == 1 else: response["ok"] == 1.0,
-    err: if response["err"].kind == BsonKindNull: "" else: response["err"],
-    n:   toInt32(response["n"])
+  return StatusReply(
+    ok:  response["ok"] == 1.0'f64,
+    n:   response["n"].toInt32(),
+    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: ""
   )
 
 # ============= #
@@ -713,9 +648,11 @@ proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, wr
   ## Insert new document into MongoDB via async connection
   result = await c.insert(@[document], ordered, writeConcern)
 
-# Update API
+# =========== #
+# Update API  #
+# =========== #
 
-proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, upsert: bool): bool {.discardable.} =
+proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, upsert: bool): StatusReply {.discardable.} =
   ## Update MongoDB document[s]
   let
     request = %*{
@@ -724,7 +661,10 @@ proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, up
       "ordered": true
     }
     response = c.db["$cmd"].find(request).one()
-  return response["ok"].toInt32() == 1'i32
+  return StatusReply(
+    ok: response["ok"] == 1'i32,
+    n: response["n"].toInt32()
+  )
 
 proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: bool, upsert: bool): Future[bool] {.async.} =
   ## Update MongoDB document[s] via async connection
@@ -734,40 +674,91 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
     "ordered": true
   }
   let response = await c.db["$cmd"].find(request).one()
-  return response["ok"] == 1'i32
+  return StatusReply(
+    ok: response["ok"] == 1'i32,
+    n: response["n"].toInt32()
+  )
 
+# ============ #
+# Remove API   #
+# ============ #
+
+proc remove*(c: Collection[Mongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = writeConcernDefault): StatusReply {.discardable.} =
+  ## Delete document[s] from MongoDB
+  let
+    request = %*{
+      "delete": c.name,
+      "deletes": [%*{"q": selector, "limit": limit}],
+      "ordered": true,
+      "writeConcern": writeConcern
+    }
+    response = c.db["$cmd"].find(request).one()
+  return StatusReply(
+    ok: response["ok"] == 1'i32,
+    n:  response["n"].toInt32(),
+  )
+
+proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = writeConcernDefault): Future[StatusReply] {.async.} =
+  ## Delete document[s] from MongoDB via asyn connection
+  let
+    request = %*{
+      "delete": c.name,
+      "deletes": [%*{"q": selector, "limit": limit}],
+      "ordered": true,
+      "writeConcern": writeConcern
+    }
+    response = await c.db["$cmd"].find(request).one()
+  return StatusReply(
+    ok: response["ok"] == 1'i32,
+    n:  response["n"].toInt32(),
+  )
+
+# =============== #
 # User management
+# =============== #
 
 proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): bool =
   ## Create new user for the specified database
   let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
   let response = db["$cmd"].find(createUserRequest).one()
-  return response["ok"] == 1.0'f64
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64,
+    n: 0
+  )
 
 proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): Future[bool] {.async.} =
   ## Create new user for the specified database via async client
-  let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
-  let response = await db["$cmd"].find(createUserRequest).one()
-  return response["ok"] == 1.0'f64
+  let
+    createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
+    response = await db["$cmd"].find(createUserRequest).one()
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64,
+    n: 0
+  )
 
 proc dropUser*(db: Database[Mongo], username: string): bool =
   ## Drop user from the db
-  let dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
-  let response = db["$cmd"].find(dropUserRequest).one()
-  return response["ok"] == 1.0'f64
+  let
+    dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
+    response = db["$cmd"].find(dropUserRequest).one()
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64,
+    n: 0
+  )
 
 proc dropUser*(db: Database[AsyncMongo], username: string): Future[bool] {.async.} =
   ## Drop user from the db via async client
-  let dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
-  let response = await db["$cmd"].find(dropUserRequest).one()
-  return response["ok"] == 1.0'f64
+  let
+    dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
+    response = await db["$cmd"].find(dropUserRequest).one()
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64,
+    n: 0
+  )
 
-# Authentication
-
-proc seqToString(s: seq[char]): string =
-  result = newString(len(s))
-  for i,c in s:
-    result[i]=c
+# ============== #
+# Authentication #
+# ============== #
 
 proc authenticateScramSha1(db: Database[Mongo], username: string, password: string): bool {.discardable.} =
   ## Authenticate connection (sync): using SCRAM-SHA-1 auth method

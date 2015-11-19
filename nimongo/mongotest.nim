@@ -49,7 +49,7 @@ suite "Mongo instance administration commands test suite":
     sco.insert(%*{"test": "test"})
     check("testdb" in sm.listDatabases())
     check("testdb" in waitFor(am.listDatabases()))
-    sco.remove(%*{"test": "test"}, RemoveSingle)
+    sco.remove(%*{"test": "test"}, limit=1)
 
   test "[     ] [SYNC] Command: 'listCollections'":
     let sclist = sdb.listCollections()
@@ -68,7 +68,7 @@ suite "Mongo connection error-handling operations":
 
 suite "Authentication":
 
-  echo "\nAuthentication\n"
+  echo "\n Authentication\n"
 
   setup:
     discard
@@ -82,7 +82,7 @@ suite "Authentication":
 
 suite "User Management":
 
-  echo "\nUser management\n"
+  echo "\n User management\n"
 
   setup:
     discard
@@ -216,17 +216,17 @@ suite "Mongo client operations test suite":
   test "[ASYNC] [SYNC] Remove single document":
     let doc = %*{"string": "hello"}
     check(sco.insert(doc))
-    check(sco.remove(doc, RemoveSingle) == true)
+    check(sco.remove(doc, limit=1).ok)
     check(waitFor(aco.insert(doc)))
-    check(waitFor(aco.remove(doc, RemoveSingle)) == true)
+    check(waitFor(aco.remove(doc, limit=1)).ok)
 
   test "[ASYNC] [SYNC] Remove multiple documents":
     check(sco.insert(@[%*{"string": "value"}, %*{"string": "value"}]))
-    check(sco.remove(%*{"string": "value"}, RemoveMultiple))
+    check(sco.remove(%*{"string": "value"}).ok)
     check(sco.find(%*{"string": "value"}).all().len() == 0)
 
     check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])))
-    check(waitFor(aco.remove(%*{"string": "value"}, RemoveMultiple)) == true)
+    check(waitFor(aco.remove(%*{"string": "value"})).ok)
     check(waitFor(aco.find(%*{"string": "value"}).all()).len() == 0)
 
 suite "Mongo aggregation commands":
