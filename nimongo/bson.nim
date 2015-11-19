@@ -545,6 +545,16 @@ iterator items*(bs: Bson): Bson =
     for item in bs.valueArray:
       yield item
 
+proc contains*(bs: Bson, key: string): bool =
+  ## Checks if Bson document has a specified field
+  if bs.kind == BsonKindDocument:
+    for field in bs.valueDocument.items():
+      if key == field.key:
+        return true
+    return false
+  else:
+    return false
+
 converter seqCharToString(x: openarray[char]): string =
   ## Converts sequence of chars to string
   result = newStringOfCap(len(x))

@@ -48,4 +48,13 @@ suite "BSON serializer/deserializer test suite":
     doc["newfield"] = "newvalue"
     check(doc["newfield"] == "newvalue")
 
+
+  test "Check if document has specific field with `in` operator":
+    let doc = %*{
+      "field1": "string",
+      "field2": 1'i32
+    }
+    check("field1" in doc)
+    check(not ("field3" in doc))
+
 echo ""
