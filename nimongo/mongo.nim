@@ -123,10 +123,34 @@ type
 
   NotFound* = object of Exception   ## Raises when querying of one documents returns empty result
 
+  StatusReply* = object  ## Database Reply
+    ok*: bool
+    n*: int
+
   MongoError* = object
     ok*:  bool
     err*: string
     n*:   int
+
+converter toBool*(sr: StatusReply): bool = sr.ok
+  ## If StatusReply.ok field is true = then StatusReply is considered
+  ## to be successful. It is a convinience wrapper for the situation
+  ## when we are not interested in no more status information than
+  ## just a flag of success.
+
+let writeConcernDefault*: Bson = %*{"w": 1, "j": false}
+  ## Default MongoDB write concern
+
+proc writeConcern*(w: string, j: bool, wtimeout: int = 0): Bson =
+  ## Custom write concern creation
+  if w == "majority":
+    result = %*{"w": w, "j", j}
+  else:
+    result = %*{"w": parseInt(w).toInt32(), "j": j}
+  if wtimeout > 0:
+    result = result("wtimeout", wtimeout)
+  return result
+
 
 # === Private APIs === #
 
@@ -314,59 +338,6 @@ proc `[]`*[T:Mongo|AsyncMongo](db: Database[T], collectionName: string): Collect
 proc `$`*(c: Collection): string =
     ## String representation of collection name
     return c.db.name & "." & c.name
-
-proc insert*(c: Collection[Mongo], document: Bson): bool {.discardable.} =
-  ## Insert new document into MongoDB
-  {.locks: [c.client.requestLock].}:
-    let
-      sdoc = document.bytes()
-      msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
-
-    return c.client.sock.trySend(msgHeader & buildMessageInsert(0, $c) & sdoc)
-
-proc insert*(c: Collection[AsyncMongo], document: Bson): Future[bool] {.async.} =
-  ## Insert new document into MongoDB via async connection
-  let
-    sdoc = document.bytes()
-    msgHeader = buildMessageHeader(int32(21 + len($c) + sdoc.len()), c.client.nextRequestId(), 0, OP_INSERT)
-  var ls: AsyncLockedSocket = await c.client.next()
-  try:
-    ls.inuse = true
-    await ls.sock.send(msgHeader & buildMessageInsert(0, $c) & sdoc)
-    ls.inuse = false
-  except OSError:
-    return false
-  return true
-
-proc insert*(c: Collection[Mongo], documents: seq[Bson], continueOnError: bool = false): bool {.discardable.} =
-  ## Insert several new documents into MongoDB using one request
-  assert len(documents) > 0
-  var
-    total = 0
-    sdocs: seq[string] = @[]
-  for d in documents.items(): sdocs.add(bytes(d))
-  for sdoc in sdocs: inc(total, sdoc.len())
-
-  let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
-  return c.client.sock.trySend(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
-
-proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], continueOnError: bool = false): Future[bool] {.async.} =
-  ## Insert new document into MongoDB via async connection
-  assert len(documents) > 0
-  var
-    total = 0
-    ls = await c.client.next()
-  let sdocs: seq[string] = mapIt(documents, string, bytes(it))
-  for sdoc in sdocs: inc(total, sdoc.len())
-
-  let msgHeader = buildMessageHeader(int32(21 + len($c) + total), c.client.nextRequestId(), 0, OP_INSERT)
-  try:
-    ls.inuse = true
-    await ls.sock.send(msgHeader & buildMessageInsert(if continueOnError: 1 else: 0, $c) & foldl(sdocs, a & b))
-    ls.inuse = false
-  except OSError:
-    return false
-  return true
 
 proc remove*(c: Collection[Mongo], selector: Bson, mode: RemoveKind): bool {.discardable.} =
   ## Delete document[s] from MongoDB
@@ -698,18 +669,62 @@ proc getLastError*(am: AsyncMongo): Future[MongoError] {.async.} =
     n:   toInt32(response["n"])
   )
 
+# ============= #
+# Insert API    #
+# ============= #
+
+proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = writeConcernDefault): StatusReply {.discardable.} =
+  ## Insert several new documents into MongoDB using one request
+  let
+    request = %*{
+      "insert": c.name,
+      "documents": documents,
+      "ordered": ordered,
+      "writeConcern": writeConcern
+    }
+    response = c.db["$cmd"].find(request).one()
+
+  return StatusReply(
+    ok: response["ok"] == 1'i32,
+    n: response["n"].toInt32()
+  )
+
+proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeConcern: Bson = writeConcernDefault): StatusReply {.discardable.} =
+  ## Insert new document into MongoDB via sync connection
+  return c.insert(@[document], ordered, writeConcern)
+
+proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = writeConcernDefault): Future[StatusReply] {.async.} =
+  ## Insert new documents into MongoDB via async connection
+  let
+    request = %*{
+      "insert": c.name,
+      "documents": documents,
+      "ordered": ordered,
+      "writeConcern": writeConcern
+    }
+    response = await c.db["$cmd"].find(request).one()
+
+  return StatusReply(
+    ok: response["ok"] == 1'i32,
+    n: response["n"].toInt32()
+  )
+
+proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, writeConcern: Bson = writeConcernDefault): Future[StatusReply] {.async.} =
+  ## Insert new document into MongoDB via async connection
+  result = await c.insert(@[document], ordered, writeConcern)
+
 # Update API
 
 proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, upsert: bool): bool {.discardable.} =
   ## Update MongoDB document[s]
-  let request = %*{
-    "update": c.name,
-    "updates": [%*{"q": selector, "u": update, "upsert": upsert, "multi": multi}],
-    "ordered": true
-  }
-  {.locks: [c.client.requestLock].}:
-    let response = c.db["$cmd"].find(request).one()
-    return response["ok"].toInt32() == 1'i32
+  let
+    request = %*{
+      "update": c.name,
+      "updates": [%*{"q": selector, "u": update, "upsert": upsert, "multi": multi}],
+      "ordered": true
+    }
+    response = c.db["$cmd"].find(request).one()
+  return response["ok"].toInt32() == 1'i32
 
 proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: bool, upsert: bool): Future[bool] {.async.} =
   ## Update MongoDB document[s] via async connection

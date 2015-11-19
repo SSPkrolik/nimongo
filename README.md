@@ -57,7 +57,7 @@ let connectResult = m.connect()
 let collection = m["db"]["collectionName"]
 
 ## Create new bson document
-let doc = B("name", "John")
+let doc = %*{"name": "John"}
 
 ## Insert document into DB
 collection.insert(doc)
@@ -74,19 +74,19 @@ collection.update(
 )
 
 ## Delete multiple documents
-collection.remove(B("name", "John"), RemoveMultiple)
+collection.remove(%*{"name": "John"}, RemoveMultiple)
 
 ## Delete single document
-collection.remove(B("name", "John"), RemoveSingle)
+collection.remove(%{"name": "John"}, RemoveSingle)
 
 ## Fetch one document from DB returning only one field: "name".
-let fetched = collection.find(B("name", "John"), @["name"]).one()
+let fetched = collection.find(%*{"name": "John"}, @["name"]).one()
 
 ## Fetch all matching documents from DB receiving seq[Bson]
-let documents = collection.find(B("name", "John")).all()
+let documents = collection.find(%*{"name": "John"}).all()
 
 ## Fetch all matching documents as a iterator
-for document in collection.find(B("name", "John")).items():
+for document in collection.find(%*{"name": "John"}).items():
     echo document
 ```
 
@@ -146,6 +146,9 @@ BSON
 `nimongo.bson` module implements full BSON specification, and includes means
 for developer-friendly BSON creation, modification, serialization and
 deserialization.
+
+You can user either __B(...)__ template or __`%*`__ for documents creation
+depending on what is more convenient for you.
 
 MongoDB Features
 ----------------

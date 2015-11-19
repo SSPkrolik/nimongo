@@ -132,11 +132,11 @@ suite "Mongo collection-level operations":
     check(waitFor(aco.count()) == 5)
 
   test "[ASYNC] [SYNC] 'drop' collection":
-    check(sco.insert(%*{"svalue": "hello"}) == true)
+    check(sco.insert(%*{"svalue": "hello"}))
     discard sco.drop()
     check(sco.find(%*{"svalue": "hello"}).all().len() == 0)
 
-    check(waitFor(aco.insert(%*{"svalue": "hello"})) == true)
+    check(waitFor(aco.insert(%*{"svalue": "hello"})))
     discard waitFor(aco.drop())
     check(waitFor(aco.find(%*{"svalue": "hello"}).all()).len() == 0)
 
@@ -162,8 +162,8 @@ suite "Mongo client operations test suite":
     check($aco == "testdb.async")
 
   test "[ASYNC] [SYNC] Inserting single document":
-    check(sco.insert(%*{"double": 3.1415}) == true)
-    check(waitFor(aco.insert(%*{"double": 3.1415})) == true)
+    check(sco.insert(%*{"double": 3.1415}))
+    check(waitFor(aco.insert(%*{"double": 3.1415})))
 
   test "[ASYNC] [SYNC] Inserting multiple documents":
     let
@@ -171,16 +171,16 @@ suite "Mongo client operations test suite":
       doc2 = %*{"string": "hello", "subdoc": {"name": "John"}}
       doc3 = %*{"array": ["element1", "element2", "element3"]}
 
-    check(sco.insert(@[doc1, doc2, doc3]) == true)
-    check(waitFor(aco.insert(@[doc1, doc2, doc3])) == true)
+    check(sco.insert(@[doc1, doc2, doc3]))
+    check(waitFor(aco.insert(@[doc1, doc2, doc3])))
 
   test "[ASYNC] [SYNC] Update single document":
     let
       selector = %*{"integer": "integer"}
       updater  = %*{"$set": {"integer": "string"}}
 
-    check(sco.insert(@[selector, selector]) == true)
-    check(waitFor(aco.insert(@[selector, selector])) == true)
+    check(sco.insert(@[selector, selector]))
+    check(waitFor(aco.insert(@[selector, selector])))
 
     check(sco.update(selector, updater, false, false) == true)
     check(waitFor(aco.update(selector, updater, false, false)) == true)
@@ -193,8 +193,8 @@ suite "Mongo client operations test suite":
       selector = %*{"integer": 100'i32}
       updater  = %*{"$set": {"integer": 200'i32}}
 
-    check(sco.insert(@[selector, selector]) == true)
-    check(waitFor(aco.insert(@[selector, selector])) == true)
+    check(sco.insert(@[selector, selector]))
+    check(waitFor(aco.insert(@[selector, selector])))
 
     check(sco.update(selector, updater, true, false) == true)
     check(waitFor(aco.update(selector, updater, true, false)) == true)
@@ -215,18 +215,17 @@ suite "Mongo client operations test suite":
 
   test "[ASYNC] [SYNC] Remove single document":
     let doc = %*{"string": "hello"}
-    check(sco.insert(doc) == true)
+    check(sco.insert(doc))
     check(sco.remove(doc, RemoveSingle) == true)
-    check(waitFor(aco.insert(doc)) == true)
+    check(waitFor(aco.insert(doc)))
     check(waitFor(aco.remove(doc, RemoveSingle)) == true)
 
   test "[ASYNC] [SYNC] Remove multiple documents":
-    check(sco.insert(@[%*{"string": "value"}, %*{"string": "value"}]) == true)
+    check(sco.insert(@[%*{"string": "value"}, %*{"string": "value"}]))
     check(sco.remove(%*{"string": "value"}, RemoveMultiple))
     check(sco.find(%*{"string": "value"}).all().len() == 0)
 
-    check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])) == true)
-    waitFor(sleepAsync(1))
+    check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])))
     check(waitFor(aco.remove(%*{"string": "value"}, RemoveMultiple)) == true)
     check(waitFor(aco.find(%*{"string": "value"}).all()).len() == 0)
 
@@ -242,14 +241,14 @@ suite "Mongo aggregation commands":
     sco.insert(@[%*{"string": "value"}, %*{"string": "value"}])
     check(sco.find(%*{"string": "value"}).count() == 2)
 
-    check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])) == true)
+    check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])))
     check(waitFor(aco.find(%*{"string": "value"}).count()) == 2)
 
   test "[ASYNC] [SYNC] Query distinct values by field in collection documents":
     sco.insert(@[%*{"string": "value", "int": 1'i64}, %*{"string": "value", "double": 2.0}])
     check(sco.find(%*{"string": "value"}).unique("string") == @["value"])
 
-    check(waitFor(aco.insert(@[%*{"string": "value", "int": 1'i64}, %*{"string": "value", "double": 2.0}])) == true)
+    check(waitFor(aco.insert(@[%*{"string": "value", "int": 1'i64}, %*{"string": "value", "double": 2.0}])))
     check(waitFor(aco.find(%*{"string": "value"}).unique("string")) == @["value"])
 
 suite "Mongo client querying test suite":
@@ -265,14 +264,14 @@ suite "Mongo client querying test suite":
     check(sco.insert(%*{"string": "somedoc", "myid": myId}))
     check(sco.find(%*{"myid": myId}).one()["myid"] == myId)
 
-    check(waitFor(aco.insert(%*{"string": "somedoc", "myid": myId})) == true)
+    check(waitFor(aco.insert(%*{"string": "somedoc", "myid": myId})))
     check(waitFor(aco.find(%*{"myid": myId}).one())["myid"] == myId)
 
   test "[ASYNC] [SYNC] Query multiple documents as a sequence":
-    check(sco.insert(@[%*{"string": "value"}, %*{"string": "value"}]) == true)
+    check(sco.insert(@[%*{"string": "value"}, %*{"string": "value"}]))
     check(sco.find(%*{"string": "value"}).all().len() == 2)
 
-    check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])) == true)
+    check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])))
     check(waitFor(aco.find(%*{"string": "value"}).all()).len() == 2)
 
   test "[ N/A ] [SYNC] Query multiple documents as iterator":
