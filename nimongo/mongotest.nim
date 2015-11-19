@@ -53,6 +53,9 @@ suite "Mongo instance administration commands test suite":
     let sclist = sdb.listCollections()
     check(sclist.len() == 2)
 
+    let aclist = waitFor(adb.listCollections())
+    check(aclist.len() == 2)
+
 suite "Mongo connection error-handling operations":
 
   echo "\n Mongo connection error-handling operations\n"

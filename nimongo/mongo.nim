@@ -497,11 +497,21 @@ proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
   else:
     raise new(Exception)
 
-proc listCollections*(db: Database[Mongo], filter: Bson = initBsonDocument()): seq[string] =
+proc listCollections*(db: Database[Mongo], filter: Bson = %*{}): seq[string] =
   ## List collections inside specified database
   let response = db["$cmd"].find(%*{"listCollections": 1'i32}).one()
   result = @[]
   if response["ok"] == 1.0:
+    for col in response["cursor"]["firstBatch"]:
+      result.add(col["name"])
+
+proc listCollections*(db: Database[AsyncMongo], filter: Bson = %*{}): Future[seq[string]] {.async.} =
+  ## List collections inside specified database via async connection
+  let
+    request = %*{"listCollections": 1'i32}
+    response = await db["$cmd"].find(request).one()
+  result = @[]
+  if response["ok"] == 1.0'f64:
     for col in response["cursor"]["firstBatch"]:
       result.add(col["name"])
 

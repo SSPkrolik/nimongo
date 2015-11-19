@@ -210,7 +210,7 @@ This table represents MongoDB features and their implementation status within
 |            | Copy DB         | :red_circle:       | :red_circle:       | |
 |            | List databases  | :white_check_mark: | :white_check_mark: | |
 |            | Drop database   | :white_check_mark: | :white_check_mark: | |
-|            | List collections| :white_check_mark: | :red_circle:       | |
+|            | List collections| :white_check_mark: | :white_check_mark: | |
 |            | Rename collection|:red_circle:       | :red_circle:       | |
 |            | Drop collection | :white_check_mark: | :white_check_mark: | |
 |            | Create collection|:red_circle:       | :red_circle:       | |
