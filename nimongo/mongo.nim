@@ -465,17 +465,17 @@ iterator items*(f: Cursor): Bson =
 
 proc isMaster*(sm: Mongo): bool =
   ## Perform query in order to check if connected Mongo instance is a master
-  return sm["admin"]["$cmd"].find(B("isMaster", 1)).one()["ismaster"]
+  return sm["admin"]["$cmd"].find(%*{"isMaster": 1}).one()["ismaster"]
 
 proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
   ## Perform query in order to check if ocnnected Mongo instance is a master
   ## via async connection.
-  let response = await am["admin"]["$cmd"].find(B("isMaster", 1)).one()
+  let response = await am["admin"]["$cmd"].find(%*{"isMaster": 1}).one()
   return response["ismaster"]
 
 proc listDatabases*(sm: Mongo): seq[string] =
   ## Return list of databases on the server
-  let response = sm["admin"]["$cmd"].find(B("listDatabases", 1)).one()
+  let response = sm["admin"]["$cmd"].find(%*{"listDatabases": 1}).one()
   if response["ok"] == 0.0:
     return @[]
   elif response["ok"] == 1.0:
@@ -487,7 +487,7 @@ proc listDatabases*(sm: Mongo): seq[string] =
 
 proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
   ## Return list of databases on the server via async client
-  let response = await am["admin"]["$cmd"].find(B("listDatabases", 1)).one()
+  let response = await am["admin"]["$cmd"].find(%*{"listDatabases": 1}).one()
   if response["ok"] == 0.0:
     return @[]
   elif response["ok"] == 1.0:
@@ -499,7 +499,7 @@ proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
 
 proc listCollections*(db: Database[Mongo], filter: Bson = initBsonDocument()): seq[string] =
   ## List collections inside specified database
-  let response = db["$cmd"].find(B("listCollections", 1'i32)).one()
+  let response = db["$cmd"].find(%*{"listCollections": 1'i32}).one()
   result = @[]
   if response["ok"] == 1.0:
     for col in response["cursor"]["firstBatch"]:
@@ -507,29 +507,29 @@ proc listCollections*(db: Database[Mongo], filter: Bson = initBsonDocument()): s
 
 proc drop*(db: Database[Mongo]): bool =
   ## Drop database from server
-  let response = db["$cmd"].find(B("dropDatabase", 1)).one()
+  let response = db["$cmd"].find(%*{"dropDatabase": 1}).one()
   return response["ok"] == 1.0
 
 proc drop*(db: Database[AsyncMongo]): Future[bool] {.async.} =
   ## Drop database from server via async connection
-  let response = await db["$cmd"].find(B("dropDatabase", 1)).one()
+  let response = await db["$cmd"].find(%*{"dropDatabase": 1}).one()
   return response["ok"] == 1.0
 
 proc drop*(c: Collection[Mongo]): tuple[ok: bool, message: string] =
   ## Drop collection from database
-  let response = c.db["$cmd"].find(B("drop", c.name)).one()
+  let response = c.db["$cmd"].find(%*{"drop": c.name}).one()
   let ok = response["ok"] == 1.0
   return (ok: ok, message: if ok: "" else: response["errmsg"])
 
 proc drop*(c: Collection[AsyncMongo]): Future[tuple[ok: bool, message: string]] {.async.} =
   ## Drop collection from database via async clinet
-  let response = await c.db["$cmd"].find(B("drop", c.name)).one()
+  let response = await c.db["$cmd"].find(%*{"drop": c.name}).one()
   let ok = response["ok"] == 1.0
   return (ok: ok, message: if ok: "" else: response["errmsg"])
 
 proc count*(c: Collection[Mongo]): int =
   ## Return number of documents in collection
-  let x = c.db["$cmd"].find(B("count", c.name)).one()["n"]
+  let x = c.db["$cmd"].find(%*{"count": c.name}).one()["n"]
   if x.kind == BsonKindInt32:
     return x.toInt32()
   elif x.kind == BsonKindDouble:
@@ -538,7 +538,7 @@ proc count*(c: Collection[Mongo]): int =
 proc count*(c: Collection[AsyncMongo]): Future[int] {.async.} =
   ## Return number of documents in collection via async client
   let
-    res = await c.db["$cmd"].find(B("count", c.name)).one()
+    res = await c.db["$cmd"].find(%*{"count": c.name}).one()
     x = res["n"]
   if x.kind == BsonKindInt32:
     return x.toInt32()
@@ -547,7 +547,7 @@ proc count*(c: Collection[AsyncMongo]): Future[int] {.async.} =
 
 proc count*(f: Cursor[Mongo]): int =
   ## Return number of documents in find query result
-  let x = f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()["n"]
+  let x = f.collection.db["$cmd"].find(%*{"count": f.collection.name, "query": f.query}).one()["n"]
   if x.kind == BsonKindInt32:
     return x.toInt32()
   elif x.kind == BsonKindDouble:
@@ -556,7 +556,10 @@ proc count*(f: Cursor[Mongo]): int =
 proc count*(f: Cursor[AsyncMongo]): Future[int] {.async.} =
   ## Return number of document in find query result via async connection
   let
-    response = await f.collection.db["$cmd"].find(B("count", f.collection.name)("query", f.query)).one()
+    response = await f.collection.db["$cmd"].find(%*{
+      "count": f.collection.name,
+      "query": f.query
+    }).one()
     x = response["n"]
   if x.kind == BsonKindInt32:
     return x.toInt32()
@@ -567,10 +570,17 @@ proc unique*(f: Cursor[Mongo], key: string): seq[string] =
   ## Force cursor to return only distinct documents by specified field.
   ## Corresponds to '.distinct()' MongoDB command. If Nim we use 'unique'
   ## because 'distinct' is Nim's reserved keyword.
-  let x = f.collection.db["$cmd"].find(B("distinct", f.collection.name)("query", f.query)("key", key)).one()
+  let
+    request = %*{
+      "distinct": f.collection.name,
+      "query": f.query,
+      "key": key
+    }
+    response = f.collection.db["$cmd"].find(request).one()
+
   result = @[]
-  if x["ok"] == 1.0:
-    for item in x["values"].items():
+  if response["ok"] == 1.0'f64:
+    for item in response["values"].items():
       result.add(item.toString())
 
 proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} =
@@ -578,17 +588,21 @@ proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} 
   ## Corresponds to '.distinct()' MongoDB command. If Nim we use 'unique'
   ## because 'distinct' is Nim's reserved keyword.
   let
-    response = await f.collection.db["$cmd"].find(B("distinct", f.collection.name)("query", f.query)("key", key)).one()
-    ok = response["ok"]
-    va = response["values"]
+    request = %*{
+      "distinct": f.collection.name,
+      "query": f.query,
+      "key": key
+    }
+    response = await f.collection.db["$cmd"].find(request).one()
+
   result = @[]
-  if ok == 1.0:
-    for item in va.items():
+  if response["ok"] == 1.0'f64:
+    for item in response["values"].items():
       result.add(item.toString())
 
 proc getLastError*(m: Mongo): StatusReply =
   ## Get last error happened in current connection
-  let response = m["admin"]["$cmd"].find(B("getLastError", 1'i32)).one()
+  let response = m["admin"]["$cmd"].find(%*{"getLastError": 1'i32}).one()
   return StatusReply(
     ok:  response["ok"] == 1.0'f64,
     n:   response["n"].toInt32(),
@@ -597,7 +611,7 @@ proc getLastError*(m: Mongo): StatusReply =
 
 proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
   ## Get last error happened in current connection
-  let response = await am["admin"]["$cmd"].find(B("getLastError", 1'i32)).one()
+  let response = await am["admin"]["$cmd"].find(%*{"getLastError": 1'i32}).one()
   return StatusReply(
     ok:  response["ok"] == 1.0'f64,
     n:   response["n"].toInt32(),
@@ -719,7 +733,16 @@ proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered:
 
 proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): bool =
   ## Create new user for the specified database
-  let createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
+  let createUserRequest = %*{
+    "createUser": username,
+    "pwd": pwd,
+    "customData": customData,
+    "roles": roles,
+    "writeConcern": %*{
+      "w": 1'i32,
+      "j": 0'i32
+    }
+  }
   let response = db["$cmd"].find(createUserRequest).one()
   return StatusReply(
     ok: response["ok"] == 1.0'f64,
@@ -729,7 +752,16 @@ proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData:
 proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): Future[bool] {.async.} =
   ## Create new user for the specified database via async client
   let
-    createUserRequest = B("createUser", username)("pwd", pwd)("customData", customData)("roles", roles)("writeConcern", B("w", 1'i32)("j", 0'i32))
+    createUserRequest = %*{
+      "createUser": username,
+      "pwd": pwd,
+      "customData": customData,
+      "roles": roles,
+      "writeConcern": %*{
+        "w": 1'i32,
+        "j": 0'i32
+      }
+    }
     response = await db["$cmd"].find(createUserRequest).one()
   return StatusReply(
     ok: response["ok"] == 1.0'f64,
@@ -739,7 +771,13 @@ proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, custom
 proc dropUser*(db: Database[Mongo], username: string): bool =
   ## Drop user from the db
   let
-    dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
+    dropUserRequest = %*{
+      "dropUser": username,
+      "writeConcern": %*{
+        "w": 1'i32,
+        "j": 0'i32
+        }
+      }
     response = db["$cmd"].find(dropUserRequest).one()
   return StatusReply(
     ok: response["ok"] == 1.0'f64,
@@ -749,7 +787,13 @@ proc dropUser*(db: Database[Mongo], username: string): bool =
 proc dropUser*(db: Database[AsyncMongo], username: string): Future[bool] {.async.} =
   ## Drop user from the db via async client
   let
-    dropUserRequest = B("dropUser", username)("writeConcern", B("w", 0'i32)("j", 0'i32))
+    dropUserRequest = %*{
+      "dropUser": username,
+      "writeConcern": %*{
+        "w": 1'i32,
+        "j": 0'i32
+        }
+      }
     response = await db["$cmd"].find(dropUserRequest).one()
   return StatusReply(
     ok: response["ok"] == 1.0'f64,
@@ -769,12 +813,12 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   let nonce = base64.encode(($random(1.0))[2..^1])
   let fb = "n=" & uname & ",r=" & nonce
 
-  let requestStart = B(
-    "saslStart", 1'i32)(
-    "mechanism", "SCRAM-SHA-1")(
-    "payload", bin("n,," & fb))(
-    "autoAuthorize", 1'i32
-  )
+  let requestStart = %*{
+    "saslStart": 1'i32,
+    "mechanism": "SCRAM-SHA-1",
+    "payload": bin("n,," & fb),
+    "autoAuthorize": 1'i32
+  }
   let responseStart = db["$cmd"].find(requestStart).one()
   let responsePayload = binstr(responseStart["payload"])
 
@@ -813,11 +857,11 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   let client_proof = "p=" & base64.encode(toEncode)
   let client_final = join([without_proof, client_proof], ",")
 
-  let requestContinue1 = B(
-    "saslContinue", 1'i32)(
-    "conversationId", toInt32(responseStart["conversationId"]))(
-    "payload", bin(client_final)
-  )
+  let requestContinue1 = %*{
+    "saslContinue": 1'i32,
+    "conversationId": toInt32(responseStart["conversationId"]),
+    "payload": bin(client_final)
+  }
   let responseContinue1 =  db["$cmd"].find(requestContinue1).one()
 
   let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
@@ -837,11 +881,11 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   # Depending on how it's configured, Cyrus SASL (which the server uses)
   # requires a third empty challenge.
   if not responseContinue1["done"].toBool():
-      let requestContinue2 = B(
-        "saslContinue", 1'i32)(
-        "conversationId", responseContinue1["conversationId"])(
-        "payload", ""
-      )
+      let requestContinue2 = %*{
+        "saslContinue": 1'i32,
+        "conversationId": responseContinue1["conversationId"],
+        "payload": ""
+      }
       let responseContinue2 = db["$cmd"].find(requestContinue2).one()
       if not responseContinue2["done"].toBool():
           raise newException(Exception, "SASL conversation failed to complete.")
@@ -852,27 +896,27 @@ proc authenticate*(db: Database[Mongo], username: string, password: string): boo
   if username == "" or password == "":
     return false
 
-  let nonce: string = db["$cmd"].find(B("getnonce", 1'i32)).one()["nonce"]
+  let nonce: string = db["$cmd"].find(%*{"getnonce": 1'i32}).one()["nonce"]
   let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
   let key = $toMd5("$#$#$#" % [nonce, username, passwordDigest])
-  let request = B(
-    "authenticate", 1'i32)(
-    "mechanism", "MONGODB-CR")(
-    "user", username)(
-    "nonce", nonce)(
-    "key", key)(
-    "autoAuthorize", 1'i32
-  )
+  let request = %*{
+    "authenticate": 1'i32,
+    "mechanism": "MONGODB-CR",
+    "user": username,
+    "nonce": nonce,
+    "key": key,
+    "autoAuthorize": 1'i32
+  }
   let response = db["$cmd"].find(request).one()
   return if response["ok"] == 0: false else: true
 
 proc connect*(m: Mongo): bool =
-    ## Connect socket to mongo server
-    try:
-        m.sock.connect(m.host, net.Port(m.port), -1)
-    except OSError:
-        return false
-    return true
+  ## Connect socket to mongo server
+  try:
+      m.sock.connect(m.host, net.Port(m.port), -1)
+  except OSError:
+      return false
+  return true
 
 proc newMongoDatabase*(u: Uri): Database[Mongo] =
   ## Create new Mongo sync client using URI type

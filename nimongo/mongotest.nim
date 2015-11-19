@@ -24,8 +24,8 @@ let
   aco: Collection[AsyncMongo] = adb[TestAsyncCol]
 
 # Connection is required for running tests
-require(sm.connect() == true)
-require(waitFor(am.connect()) == true)
+require(sm.connect())
+require(waitFor(am.connect()))
 
 suite "Mongo instance administration commands test suite":
 
@@ -37,13 +37,11 @@ suite "Mongo instance administration commands test suite":
   test "[ASYNC] [SYNC] Command: 'isMaster'":
     var m: bool
     m = sm.isMaster()
-    check(m == true or m == false)
     m = waitFor(am.isMaster())
-    check(m == true or m == false)
 
   test "[ASYNC] [SYNC] Command: 'dropDatabase'":
-    check(sdb.drop() == true)
-    check(waitFor(adb.drop()) == true)
+    check(sdb.drop())
+    check(waitFor(adb.drop()))
 
   test "[ASYNC] [SYNC] Command: 'listDatabases'":
     sco.insert(%*{"test": "test"})
@@ -63,8 +61,8 @@ suite "Mongo connection error-handling operations":
     discard
 
   test "[ASYNC] [SYNC] Command: 'getLastError'":
-    check(sm.getLastError().ok == true)
-    check(waitFor(am.getLastError()).ok == true)
+    check(sm.getLastError().ok)
+    check(waitFor(am.getLastError()).ok)
 
 suite "Authentication":
 
@@ -182,8 +180,8 @@ suite "Mongo client operations test suite":
     check(sco.insert(@[selector, selector]))
     check(waitFor(aco.insert(@[selector, selector])))
 
-    check(sco.update(selector, updater, false, false) == true)
-    check(waitFor(aco.update(selector, updater, false, false)) == true)
+    check(sco.update(selector, updater, false, false))
+    check(waitFor(aco.update(selector, updater, false, false)))
 
     check(sco.find(%*{"integer": "string"}).all().len() == 1)
     check(waitFor(aco.find(%*{"integer": "string"}).all()).len() == 1)
@@ -196,8 +194,8 @@ suite "Mongo client operations test suite":
     check(sco.insert(@[selector, selector]))
     check(waitFor(aco.insert(@[selector, selector])))
 
-    check(sco.update(selector, updater, true, false) == true)
-    check(waitFor(aco.update(selector, updater, true, false)) == true)
+    check(sco.update(selector, updater, true, false))
+    check(waitFor(aco.update(selector, updater, true, false)))
 
     check(sco.find(%*{"integer": 200'i32}).all().len() == 2)
     check(waitFor(aco.find(%*{"integer": 200'i32}).all()).len() == 2)
@@ -207,8 +205,8 @@ suite "Mongo client operations test suite":
       selector = %*{"integer": 100'i64}
       updater  = %*{"$set": {"integer": 200'i64}}
 
-    check(sco.update(selector, updater, false, true) == true)
-    check(waitFor(aco.update(selector, updater, false, true)) == true)
+    check(sco.update(selector, updater, false, true))
+    check(waitFor(aco.update(selector, updater, false, true)))
 
     check(sco.find(%*{"integer": 200}).all().len() == 1)
     check(waitFor(aco.find(%*{"integer": 200}).all()).len() == 1)
