@@ -165,13 +165,13 @@ This table represents MongoDB features and their implementation status within
 
 | Block      | Feature         | Status (sync)      | Status (async)     | Notes |
 |-----------:|:----------------|:------------------:|:------------------:|:------|
-|Connection  |                 | __1__ / __7__      | __1__ / __7__      |       |
+|Connection  |                 | __2__ / __7__      | __2__ / __7__      |       |
 |            | Single server   | :white_check_mark: | :white_check_mark: |       |
 |            | Replica set     | :red_circle:       | :red_circle:       |       |
 |            | Socket Timeout  | :red_circle:       | :red_circle:       |       |
 |            | SSL             | :red_circle:       | :red_circle:       |       |
 |            | Connect Timeout | :red_circle:       | :red_circle:       | |
-|            | Write Concern   | :red_circle:       | :red_circle:       | |
+|            | Write Concern   | :white_check_mark: | :white_check_mark: | __setWriteConcern(...)__ |
 |            | Read Preference | :red_circle:       | :red_circle:       | |
 |Operations  | Insert (Single/Multiple), Remove (Single/Multiple), Update (Single/Multiple/Upsert) | :white_check_mark: | :white_check_mark: | |
 |Querying    |                 | __6__ / __10__     | __5__ / __9__      | |
