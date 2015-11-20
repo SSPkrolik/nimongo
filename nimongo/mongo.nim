@@ -27,6 +27,27 @@ import sha1, hmac
 
 randomize()
 
+# ===================== #
+# Write Concern support #
+# ===================== #
+
+let writeConcernDefault*: Bson = %*{"w": 1, "j": false}
+  ## Default MongoDB write concern
+
+proc writeConcern*(w: string, j: bool, wtimeout: int = 0): Bson =
+  ## Custom write concern creation
+  if w == "majority":
+    result = %*{"w": w, "j", j}
+  else:
+    result = %*{"w": parseInt(w).toInt32(), "j": j}
+  if wtimeout > 0:
+    result = result("wtimeout", wtimeout)
+  return result
+
+# ========================= #
+# Foundation types support  #
+# ========================= #
+
 type AuthenticationMethod* = enum ## What type of authentication we use
   NoAuth
   ScramSHA1                       ## +
@@ -50,17 +71,19 @@ const
   Exhaust         = 1'i32 shl 6 ##
   Partial         = 1'i32 shl 7 ## Get info only from running shards
 
+  DefaultMongoHost* = "127.0.0.1"
   DefaultMongoPort* = 27017'u16  ## Default MongoDB IP Port
 
 type
   MongoBase* = ref object of RootObj ## Base for Mongo clients
-    requestId:  int32
-    host:       string
-    port:       uint16
-    queryFlags: int32
-    username:   string
-    password:   string
-    replicas:   seq[tuple[host: string, port: uint16]]
+    requestId:    int32
+    host:         string
+    port:         uint16
+    queryFlags:   int32
+    username:     string
+    password:     string
+    replicas:     seq[tuple[host: string, port: uint16]]
+    writeConcern: Bson
 
   Mongo* = ref object of MongoBase      ## Mongo client object
     requestLock:   Lock
@@ -113,23 +136,6 @@ converter toBool*(sr: StatusReply): bool = sr.ok
   ## when we are not interested in no more status information than
   ## just a flag of success.
 
-# ===================== #
-# Write Concern support #
-# ===================== #
-
-let writeConcernDefault*: Bson = %*{"w": 1, "j": false}
-  ## Default MongoDB write concern
-
-proc writeConcern*(w: string, j: bool, wtimeout: int = 0): Bson =
-  ## Custom write concern creation
-  if w == "majority":
-    result = %*{"w": w, "j", j}
-  else:
-    result = %*{"w": parseInt(w).toInt32(), "j": j}
-  if wtimeout > 0:
-    result = result("wtimeout", wtimeout)
-  return result
-
 # === Private APIs === #
 
 proc nextRequestId(mb: MongoBase): int32 =
@@ -166,6 +172,7 @@ proc init(b: MongoBase, host: string, port: uint16) =
     b.replicas = @[]
     b.username = ""
     b.password = ""
+    b.writeConcern = writeConcernDefault
 
 proc init(b: MongoBase, u: Uri) =
     let port = if u.port.len > 0: parseInt(u.port).uint16 else: DefaultMongoPort
@@ -266,6 +273,14 @@ proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
     ## one or more shards are down.
     result = m
     m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
+
+proc setWriteConcern*(m: Mongo, w: string, j: bool, wtimeout: int = 0) =
+  ## Set client-wide write concern for sync client
+  m.writeConcern = writeConcern(w, j, wtimeout)
+
+proc setWriteConcert*(a: AsyncMongo, w: string, j: bool, wtimeout: int = 0) =
+  ## Set client-wide write concern for async client
+  a.writeConcern = writeConcern(w, j, wtimeout)
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
@@ -695,14 +710,14 @@ proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
 # Insert API    #
 # ============= #
 
-proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = writeConcernDefault): StatusReply {.discardable.} =
+proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Insert several new documents into MongoDB using one request
   let
     request = %*{
       "insert": c.name,
       "documents": documents,
       "ordered": ordered,
-      "writeConcern": writeConcern
+      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
     }
     response = c.db["$cmd"].find(request).one()
 
@@ -711,18 +726,18 @@ proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, w
     n: response["n"].toInt32()
   )
 
-proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeConcern: Bson = writeConcernDefault): StatusReply {.discardable.} =
+proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Insert new document into MongoDB via sync connection
-  return c.insert(@[document], ordered, writeConcern)
+  return c.insert(@[document], ordered, if writeConcern == nil: c.client.writeConcern else: writeConcern)
 
-proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = writeConcernDefault): Future[StatusReply] {.async.} =
+proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new documents into MongoDB via async connection
   let
     request = %*{
       "insert": c.name,
       "documents": documents,
       "ordered": ordered,
-      "writeConcern": writeConcern
+      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
     }
     response = await c.db["$cmd"].find(request).one()
 
@@ -731,9 +746,9 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = tr
     n: response["n"].toInt32()
   )
 
-proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, writeConcern: Bson = writeConcernDefault): Future[StatusReply] {.async.} =
+proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new document into MongoDB via async connection
-  result = await c.insert(@[document], ordered, writeConcern)
+  result = await c.insert(@[document], ordered, if writeConcern == nil: c.client.writeConcern else: writeConcern)
 
 # =========== #
 # Update API  #
@@ -770,14 +785,14 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
 # Remove API   #
 # ============ #
 
-proc remove*(c: Collection[Mongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = writeConcernDefault): StatusReply {.discardable.} =
+proc remove*(c: Collection[Mongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Delete document[s] from MongoDB
   let
     request = %*{
       "delete": c.name,
       "deletes": [%*{"q": selector, "limit": limit}],
       "ordered": true,
-      "writeConcern": writeConcern
+      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
     }
     response = c.db["$cmd"].find(request).one()
   return StatusReply(
@@ -785,14 +800,14 @@ proc remove*(c: Collection[Mongo], selector: Bson, limit: int = 0, ordered: bool
     n:  response["n"].toInt32(),
   )
 
-proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = writeConcernDefault): Future[StatusReply] {.async.} =
+proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Delete document[s] from MongoDB via asyn connection
   let
     request = %*{
       "delete": c.name,
       "deletes": [%*{"q": selector, "limit": limit}],
       "ordered": true,
-      "writeConcern": writeConcern
+      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
     }
     response = await c.db["$cmd"].find(request).one()
   return StatusReply(
