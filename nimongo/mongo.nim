@@ -107,9 +107,6 @@ type
     n*: int
     err*: string
 
-proc initCollectionInfo*(): CollectionInfo =
-  ## CollectionInfo constructor
-
 converter toBool*(sr: StatusReply): bool = sr.ok
   ## If StatusReply.ok field is true = then StatusReply is considered
   ## to be successful. It is a convinience wrapper for the situation
@@ -507,11 +504,33 @@ proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
   else:
     raise new(Exception)
 
-proc create*(db: Database[Mongo], name: string): StatusReply =
+proc createCollection*(db: Database[Mongo], name: string, capped: bool = false, autoIndexId: bool = true, maxSize: int = 0, maxDocs: int = 0): StatusReply =
   ## Create collection inside database via sync connection
+  var request = %*{"create": name}
 
-proc create*(db: Database[AsyncMongo], name: string): StatusReply =
+  if capped: request = request("capped", capped)
+  if autoIndexId: request = request("autoIndexId", true)
+  if maxSize > 0: request = request("size", maxSize)
+  if maxSize > 0: request = request("max", maxDocs)
+
+  let response = db["$cmd"].find(request).one()
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64
+  )
+
+proc createCollection*(db: Database[AsyncMongo], name: string, capped: bool = false, autoIndexId: bool = true, maxSize: int = 0, maxDocs: int = 0): Future[StatusReply] {.async.} =
   ## Create collection inside database via async connection
+  var request = %*{"create": name}
+
+  if capped: request = request("capped", capped)
+  if autoIndexId: request = request("autoIndexId", true)
+  if maxSize > 0: request = request("size", maxSize)
+  if maxSize > 0: request = request("max", maxDocs)
+
+  let response = await db["$cmd"].find(request).one()
+  return StatusReply(
+    ok: response["ok"] == 1.0'f64
+  )
 
 proc listCollections*(db: Database[Mongo], filter: Bson = %*{}): seq[string] =
   ## List collections inside specified database
