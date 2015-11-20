@@ -206,7 +206,7 @@ This table represents MongoDB features and their implementation status within
 |Replication |                 | __1__ / __1__      | __1__ / __1__      | |
 |            | Is Master       | :white_check_mark: | :white_check_mark: | |
 |Sharding    |                 | __0__ / __0__      | __0__ / __0__      | |
-|Admin Commands|               | __6__ / __7__      | __6__ / __7__      | |
+|Instance Administration Commands|               | __6__ / __7__      | __6__ / __7__      | |
 |            | Copy DB         | :red_circle:       | :red_circle:       | |
 |            | List databases  | :white_check_mark: | :white_check_mark: | |
 |            | Drop database   | :white_check_mark: | :white_check_mark: | |
