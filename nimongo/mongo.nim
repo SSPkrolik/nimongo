@@ -979,6 +979,93 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
           raise newException(Exception, "SASL conversation failed to complete.")
   return true
 
+proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password: string): Future[bool] {.async.} =
+  ## Authenticate connection (async) using SCRAM-SHA-1 method
+  if username == "" or password == "":
+    return false
+
+  let uname = username.replace("=", "=3D").replace(",", "=2C")
+  let nonce = base64.encode(($random(1.0))[2..^1])
+  let fb = "n=" & uname & ",r=" & nonce
+
+  let requestStart = %*{
+    "saslStart": 1'i32,
+    "mechanism": "SCRAM-SHA-1",
+    "payload": bin("n,," & fb),
+    "autoAuthorize": 1'i32
+  }
+  let responseStart = await db["$cmd"].find(requestStart).one()
+  let responsePayload = binstr(responseStart["payload"])
+
+  proc parsePayload(p: string): Table[string, string] =
+    result = initTable[string, string]()
+    for item in p.split(","):
+      let e = item.find('=')
+      let key = item[0..e - 1]
+      let val = item[e + 1..^1]
+      result[key] = val
+
+  var parsedPayload = parsePayload(responsePayload)
+  let iterations = parseInt(parsedPayload["i"])
+  let salt = base64.decode(parsedPayload["s"])
+  let rnonce = parsedPayload["r"]
+
+  let withoutProof = "c=biws,r=" & rnonce
+  let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
+  var saltedPass = pbkdf2_hmac_sha1(20, passwordDigest, salt, iterations.uint32)
+
+  proc stringWithSHA1Digest(d: SHA1Digest): string =
+    result = newString(d.len)
+    copyMem(addr result[0], unsafeAddr d[0], d.len)
+
+  let client_key = hmac_sha1(saltedPass, "Client Key")
+  let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
+
+  let auth_msg = join([fb, responsePayload, withoutProof], ",")
+
+  let client_sig = hmac_sha1(stored_key, auth_msg)
+
+  var toEncode = newString(20)
+  for i in 0..<client_key.len():
+    toEncode[i] = cast[char](cast[uint8](client_key[i]) xor cast[uint8](client_sig[i]))
+
+  let client_proof = "p=" & base64.encode(toEncode)
+  let client_final = join([without_proof, client_proof], ",")
+
+  let requestContinue1 = %*{
+    "saslContinue": 1'i32,
+    "conversationId": toInt32(responseStart["conversationId"]),
+    "payload": bin(client_final)
+  }
+  let responseContinue1 = await db["$cmd"].find(requestContinue1).one()
+
+  let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
+  let server_sig = base64.encode(stringWithSHA1Digest(hmac_sha1(server_key, auth_msg)))
+
+  parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
+
+  proc compare_digest(a, b: string): bool =
+    var res : uint8
+    for i in 0 ..< a.len:
+      res = res or (cast[uint8](a[i]) xor cast[uint8](b[i]))
+    result = res == 0
+
+  if not compare_digest(parsedPayload["v"], server_sig):
+    raise newException(Exception, "Server returned an invalid signature.")
+
+  # Depending on how it's configured, Cyrus SASL (which the server uses)
+  # requires a third empty challenge.
+  if not responseContinue1["done"].toBool():
+    let requestContinue2 = %*{
+      "saslContinue": 1'i32,
+      "conversationId": responseContinue1["conversationId"],
+      "payload": ""
+    }
+    let responseContinue2 = await db["$cmd"].find(requestContinue2).one()
+    if not responseContinue2["done"].toBool():
+      raise newException(Exception, "SASL conversation failed to complete.")
+  return true
+
 proc authenticate*(db: Database[Mongo], username: string, password: string): bool {.discardable.} =
   ## Authenticate connection (sync): using MONGODB-CR auth method
   if username == "" or password == "":

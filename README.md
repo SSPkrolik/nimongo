@@ -188,7 +188,7 @@ This table represents MongoDB features and their implementation status within
 |            | getLastError    | :white_check_mark: | :white_check_mark: | |
 |Authentication |              | __1__ / __7__      | __1__ / __7__      | |
 |            | authenticate    | :red_circle:       | :red_circle:       | |
-|            | SCRAM-SHA-1     | :white_check_mark: | :red_circle:       | |
+|            | SCRAM-SHA-1     | :white_check_mark: | :white_check_mark: | |
 |            | MONGODB-CR      | :red_circle:       | :red_circle:       | |
 |            | MONGODB-X509    | :red_circle:       | :red_circle:       | |
 |            | GSSAPI (Kerberos)|:red_circle:       | :red_circle:       | |
