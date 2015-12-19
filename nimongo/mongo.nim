@@ -88,7 +88,7 @@ type
   Mongo* = ref object of MongoBase      ## Mongo client object
     requestLock:   Lock
     sock:          Socket
-    authenticated: bool
+    authenticated*: bool
 
   AsyncLockedSocket = object
     inuse:         bool
@@ -101,7 +101,7 @@ type
 
   Database*[T] = ref object of MongoBase   ## MongoDB database object
     name:   string
-    client: T
+    client*: T
 
   CollectionInfo* = object  ## Collection information (for manual creation)
     disableIdIndex*: bool
@@ -908,6 +908,10 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
     "autoAuthorize": 1'i32
   }
   let responseStart = db["$cmd"].find(requestStart).one()
+  ## teroz
+  ## line to check if connect worked
+  if isNil(responseStart) or not isNil(responseStart["code"]): return false #connect failed or auth failure
+  db.client.authenticated = true
   let responsePayload = binstr(responseStart["payload"])
 
   proc parsePayload(p: string): Table[string, string] =
@@ -1100,7 +1104,7 @@ proc newMongoDatabase*(u: Uri): Database[Mongo] =
     result.new()
     result.name = u.path.extractFileName()
     result.client = client
-    result.authenticateScramSha1(client.username, client.password)
+    result.client.authenticated = result.authenticateScramSha1(client.username, client.password)
 
 proc newMongoDatabase*(u: string): Database[Mongo] =
   ## Create new Mongo sync client using URI as string
