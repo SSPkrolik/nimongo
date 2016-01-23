@@ -227,8 +227,12 @@ proc bytes*(bs: Bson): string =
     of BsonKindArray:
         result = ""
         for val in bs.valueArray: result = result & bytes(val)
-        result = result & char(0)
-        result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
+        if bs.key != "":
+            result = result & char(0)
+            result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
+        else:
+            result = result & char(0)
+            result = int32ToBytes(int32(len(result) + 4)) & result
     of BsonKindBinary:
         case bs.subtype
         of BsonSubtypeMd5:
@@ -467,14 +471,17 @@ proc geo*(loc: GeoPoint): Bson =
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
   result = bs
-  if not isNil(val):
-    var value: Bson = val
-    value.key = key
-    result.valueDocument.add(value)
+  if bs.kind == BsonKindDocument:
+    if not isNil(val):
+        var value: Bson = val
+        value.key = key
+        result.valueDocument.add(value)
+    else:
+        var value: Bson = null()
+        value.key = key
+        result.valueDocument.add(value)
   else:
-    var value: Bson = null()
-    value.key = key
-    result.valueDocument.add(value)
+    raise new(Exception)
 
 proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     ## Add array field to bson object
@@ -666,7 +673,7 @@ when isMainModule:
         "subdoc", initBsonDocument()(
             "salary", 500
         )(
-        "array", @["hello", "wold"]
+        "array", @[%*{"string": "hello"},%*{"string" : "world"}]
         )
     )
     echo bdoc
