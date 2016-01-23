@@ -908,7 +908,6 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
     "autoAuthorize": 1'i32
   }
   let responseStart = db["$cmd"].find(requestStart).one()
-  ## teroz
   ## line to check if connect worked
   if isNil(responseStart) or not isNil(responseStart["code"]): return false #connect failed or auth failure
   db.client.authenticated = true
