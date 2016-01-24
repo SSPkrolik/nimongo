@@ -467,6 +467,13 @@ proc geo*(loc: GeoPoint): Bson =
     kind: BsonKindArray,
     valueArray: @[loc[0].toBson(), loc[1].toBson()]
   )
+proc timeUTC*(time: Time): Bson =
+  ## Create UTC datetime Bson object.
+  return Bson(
+    key: "",
+    kind: BsonKindTimeUTC,
+    valueTime: time
+  )
 
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   ## Add field to bson object
@@ -670,6 +677,7 @@ when isMainModule:
         "someRef", dbref("db.col", genOid()))(
         "userDefined", binuser("some-binary-data"))(
         "someTimestamp", BsonTimestamp(increment: 1, timestamp: 1))(
+        "utcTime", timeUTC(getTime()))(
         "subdoc", initBsonDocument()(
             "salary", 500
         )(
