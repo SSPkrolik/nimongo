@@ -89,6 +89,18 @@ if removeResult.ok:
 ## Delete single document
 collection.remove(%{"name": "John"}, limit=1)
 
+## Delete collection
+collection.drop()
+
+## Delete single document
+collection.remove(%{"name": "John"}, limit=1)
+
+## Fetch number of documents in collection
+collection.count()
+
+## Fetch number of documents in query
+let tally = collection.find(%*{"name": "John"}).count()
+
 ## Fetch one document from DB returning only one field: "name".
 let fetched = collection.find(%*{"name": "John"}, @["name"]).one()
 
@@ -98,6 +110,9 @@ let documents = collection.find(%*{"name": "John"}).all()
 ## Fetch all matching documents as a iterator
 for document in collection.find(%*{"name": "John"}).items():
   echo document
+
+## Force cursor to return only distinct documents by specified field.
+let documents = collection.find(%*{"name": "John"}).unique("name").all()
 ```
 
 Usage of async client
