@@ -165,23 +165,23 @@ converter toTime*(x: Bson): Time =
     return x.valueTime
 
 converter toBson*(x: BsonTimestamp): Bson =
-  ## Convert inner BsonTimestamp to Bson object
-  return Bson(key: "", kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
+    ## Convert inner BsonTimestamp to Bson object
+    return Bson(key: "", kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
 
 converter toTimestamp*(x: Bson): BsonTimestamp =
-  ## Convert Bson object to inner BsonTimestamp type
-  return x.valueTimestamp
+    ## Convert Bson object to inner BsonTimestamp type
+    return x.valueTimestamp
 
 converter toBson*(x: MD5Digest): Bson =
-  ## Convert MD5Digest to Bson object
-  return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
+    ## Convert MD5Digest to Bson object
+    return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
 
 converter toBson*(x: var MD5Context): Bson =
-  ## Convert MD5Context to Bson object (still digest from current context).
-  ## :WARNING: MD5Context is finalized during conversion.
-  var digest: MD5Digest
-  x.md5Final(digest)
-  return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: digest)
+    ## Convert MD5Context to Bson object (still digest from current context).
+    ## :WARNING: MD5Context is finalized during conversion.
+    var digest: MD5Digest
+    x.md5Final(digest)
+    return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: digest)
 
 proc int32ToBytes*(x: int32): string =
     ## Convert int32 data piece into series of bytes
@@ -189,24 +189,24 @@ proc int32ToBytes*(x: int32): string =
     copyMem(addr(result[0]), unsafeAddr x, 4)
 
 proc float64ToBytes*(x: float64): string =
-  ## Convert float64 data piece into series of bytes
-  result = newString(8).TaintedString
-  copyMem(addr(result[0]), unsafeAddr x, 8)
+    ## Convert float64 data piece into series of bytes
+    result = newString(8).TaintedString
+    copyMem(addr(result[0]), unsafeAddr x, 8)
 
 proc int64ToBytes*(x: int64): string =
-  ## Convert int64 data piece into series of bytes
-  result = newString(8).TaintedString
-  copyMem(addr(result[0]), unsafeAddr x, 8)
+    ## Convert int64 data piece into series of bytes
+    result = newString(8).TaintedString
+    copyMem(addr(result[0]), unsafeAddr x, 8)
 
 proc boolToBytes*(x: bool): string =
-  ## Convert bool data piece into series of bytes
-  if x == true: return $char(1)
-  else: return $char(0)
+    ## Convert bool data piece into series of bytes
+    if x == true: return $char(1)
+    else: return $char(0)
 
 proc oidToBytes*(x: Oid): string =
-  ## Convert Mongo Object ID data piece into series to bytes
-  result = newString(12).TaintedString
-  copyMem(addr(result[0]), unsafeAddr x, 12)
+    ## Convert Mongo Object ID data piece into series to bytes
+    result = newString(12).TaintedString
+    copyMem(addr(result[0]), unsafeAddr x, 12)
 
 proc bytes*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
@@ -348,18 +348,18 @@ proc `$`*(bs: Bson): string =
     return stringify(bs)
 
 proc initBsonDocument*(): Bson =
-  ## Create new top-level Bson document
-  result.new
-  result.key = ""
-  result.kind = BsonKindDocument
-  result.valueDocument = @[]
+    ## Create new top-level Bson document
+    result.new
+    result.key = ""
+    result.kind = BsonKindDocument
+    result.valueDocument = @[]
 
 proc newBsonDocument*(): Bson =
-  ## Create new empty Bson document
-  result.new
-  result.key = ""
-  result.kind = BsonKindDocument
-  result.valueDocument = @[]
+    ## Create new empty Bson document
+    result.new
+    result.key = ""
+    result.kind = BsonKindDocument
+    result.valueDocument = @[]
 
 proc initBsonArray*(): Bson =
     ## Create new Bson array
@@ -402,8 +402,8 @@ proc toBson(x: NimNode, child: NimNode = nil): NimNode =
     return x
 
 macro `%*`*(x: expr): expr =
-  ## Perform dict-like structure conversion into bson
-  result = toBson(x)
+    ## Perform dict-like structure conversion into bson
+    result = toBson(x)
 
 template B*(key: string, val: Bson): expr =  ## Shortcut for _initBsonDocument
     initBsonDocument()(key, val)
@@ -412,69 +412,73 @@ template B*[T](key: string, values: seq[T]): expr =
     initBsonDocument()(key, values)
 
 proc dbref*(refcol: string, refoid: Oid): Bson =
-  ## Create new DBRef (database reference) MongoDB bson type
-  return Bson(key: "", kind: BsonKindDBPointer, refcol: refcol, refoid: refoid)
+    ## Create new DBRef (database reference) MongoDB bson type
+    return Bson(key: "", kind: BsonKindDBPointer, refcol: refcol, refoid: refoid)
 
 proc undefined*(): Bson =
-  ## Create new Bson 'undefined' value
-  return Bson(key: "", kind: BsonKindUndefined)
+    ## Create new Bson 'undefined' value
+    return Bson(key: "", kind: BsonKindUndefined)
 
 proc null*(): Bson =
-  ## Create new Bson 'null' value
-  return Bson(key: "", kind: BsonKindNull)
+    ## Create new Bson 'null' value
+    return Bson(key: "", kind: BsonKindNull)
 
 proc minkey*(): Bson =
-  ## Create new Bson value representing 'Min key' bson type
-  return Bson(key: "", kind: BsonKindMinimumKey)
+    ## Create new Bson value representing 'Min key' bson type
+    return Bson(key: "", kind: BsonKindMinimumKey)
 
 proc maxkey*(): Bson =
-  ## Create new Bson value representing 'Max key' bson type
-  return Bson(key: "", kind: BsonKindMaximumKey)
+    ## Create new Bson value representing 'Max key' bson type
+    return Bson(key: "", kind: BsonKindMaximumKey)
 
 proc regex*(pattern: string, options: string): Bson =
-  ## Create new Bson value representing Regexp bson type
-  return Bson(key: "", kind: BsonKindRegexp, regex: pattern, options: options)
+    ## Create new Bson value representing Regexp bson type
+    return Bson(key: "", kind: BsonKindRegexp, regex: pattern, options: options)
 
 proc js*(code: string): Bson =
-  ## Create new Bson value representing JavaScript code bson type
-  return Bson(key: "", kind: BsonKindJSCode, valueCode: code)
+    ## Create new Bson value representing JavaScript code bson type
+    return Bson(key: "", kind: BsonKindJSCode, valueCode: code)
 
 proc bin*(bindata: string): Bson =
-  ## Create new binary Bson object with 'generic' subtype
-  return Bson(
-    key: "", kind: BsonKindBinary, subtype: BsonSubtypeGeneric,
-    valueGeneric: bindata
-  )
+    ## Create new binary Bson object with 'generic' subtype
+    return Bson(
+        key: "",
+        kind: BsonKindBinary,
+        subtype: BsonSubtypeGeneric,
+        valueGeneric: bindata
+    )
 
 proc binstr*(x: Bson): string =
-  return x.valueGeneric
+    return x.valueGeneric
 
 proc binuser*(bindata: string): Bson =
-  ## Create new binray Bson object with 'user-defined' subtype
-  return Bson(
-    key: "", kind: BsonKindBinary, subtype: BsonSubtype.BsonSubtypeUserDefined,
-    valueUserDefined: bindata
-  )
+    ## Create new binray Bson object with 'user-defined' subtype
+    return Bson(
+        key: "",
+        kind: BsonKindBinary,
+        subtype: BsonSubtype.BsonSubtypeUserDefined,
+        valueUserDefined: bindata
+    )
 
 proc geo*(loc: GeoPoint): Bson =
-  ## Convert array of two floats into Bson as MongoDB Geo-Point.
-  return Bson(
-    key: "",
-    kind: BsonKindArray,
-    valueArray: @[loc[0].toBson(), loc[1].toBson()]
-  )
+    ## Convert array of two floats into Bson as MongoDB Geo-Point.
+    return Bson(
+        key: "",
+        kind: BsonKindArray,
+        valueArray: @[loc[0].toBson(), loc[1].toBson()]
+    )
 
 proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
-  ## Add field to bson object
-  result = bs
-  if not isNil(val):
-    var value: Bson = val
-    value.key = key
-    result.valueDocument.add(value)
-  else:
-    var value: Bson = null()
-    value.key = key
-    result.valueDocument.add(value)
+    ## Add field to bson object
+    result = bs
+    if not isNil(val):
+        var value: Bson = val
+        value.key = key
+        result.valueDocument.add(value)
+    else:
+        var value: Bson = null()
+        value.key = key
+        result.valueDocument.add(value)
 
 proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     ## Add array field to bson object
@@ -496,10 +500,10 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     result.valueDocument.add(arr)
 
 proc add*[T](bs: Bson, value: T): Bson =
-  result = bs
-  var val: Bson = value
-  val.key = $len(bs.valueArray)
-  result.valueArray.add(val)
+    result = bs
+    var val: Bson = value
+    val.key = $len(bs.valueArray)
+    result.valueArray.add(val)
 
 proc `[]`*(bs: Bson, key: string): Bson =
     ## Get Bson document field
@@ -525,25 +529,25 @@ proc `[]=`*(bs: Bson, key: string, value: Bson) =
     raise new(Exception)
 
 proc `[]`*(bs: Bson, key: int): Bson =
-  ## Get Bson array item by index
-  if bs.kind == BsonKindArray:
-    return bs.valueArray[key]
-  else:
-    raise new(Exception)
+    ## Get Bson array item by index
+    if bs.kind == BsonKindArray:
+        return bs.valueArray[key]
+    else:
+        raise new(Exception)
 
 proc `[]=`*(bs: Bson, key: int, value: Bson) =
-  ## Modify Bson array element
-  if bs.kind == BsonKindArray:
-    bs.valueArray[key] = value
+    ## Modify Bson array element
+    if bs.kind == BsonKindArray:
+        bs.valueArray[key] = value
 
 iterator items*(bs: Bson): Bson =
-  ## Iterate overt Bson document or array fields
-  if bs.kind == BsonKindDocument:
-    for item in bs.valueDocument:
-      yield item
-  elif bs.kind == BsonKindArray:
-    for item in bs.valueArray:
-      yield item
+    ## Iterate over Bson document or array fields
+    if bs.kind == BsonKindDocument:
+        for item in bs.valueDocument:
+            yield item
+    elif bs.kind == BsonKindArray:
+        for item in bs.valueArray:
+            yield item
 
 proc contains*(bs: Bson, key: string): bool =
   ## Checks if Bson document has a specified field
@@ -556,9 +560,9 @@ proc contains*(bs: Bson, key: string): bool =
     return false
 
 converter seqCharToString(x: openarray[char]): string =
-  ## Converts sequence of chars to string
-  result = newStringOfCap(len(x))
-  for c in x: result = result & c
+    ## Converts sequence of chars to string
+    result = newStringOfCap(len(x))
+    for c in x: result = result & c
 
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte stream

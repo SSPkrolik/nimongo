@@ -3,6 +3,7 @@ mongo
 bson
 mongotest
 bsontest
+query
 nimongotest
 profile_results.txt
 
