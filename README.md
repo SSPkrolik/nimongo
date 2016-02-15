@@ -61,6 +61,8 @@ let doc = %*{
   "name": "John"
 }
 
+
+
 ## Insert document into DB
 collection.insert(doc)
 
@@ -87,6 +89,18 @@ if removeResult.ok:
 ## Delete single document
 collection.remove(%{"name": "John"}, limit=1)
 
+## Delete collection
+collection.drop()
+
+## Delete single document
+collection.remove(%{"name": "John"}, limit=1)
+
+## Fetch number of documents in collection
+collection.count()
+
+## Fetch number of documents in query
+let tally = collection.find(%*{"name": "John"}).count()
+
 ## Fetch one document from DB returning only one field: "name".
 let fetched = collection.find(%*{"name": "John"}, @["name"]).one()
 
@@ -96,6 +110,9 @@ let documents = collection.find(%*{"name": "John"}).all()
 ## Fetch all matching documents as a iterator
 for document in collection.find(%*{"name": "John"}).items():
   echo document
+
+## Force cursor to return only distinct documents by specified field.
+let documents = collection.find(%*{"name": "John"}).unique("name").all()
 ```
 
 Usage of async client
@@ -157,6 +174,34 @@ deserialization.
 
 You can user either __B(...)__ template or __`%*`__ for documents creation
 depending on what is more convenient for you.
+
+
+```nim
+
+let doc = B("name", "John")("surname", "Smith")("salary", 100)
+let doc2 = B(
+    "name", "Sam")(
+    "surname", "Uncle")(
+    "salary", 1000)(
+    "skills", @["power", "government", "army"]
+    )
+```    
+    
+Authentication
+---------------
+`nimongo` supports the new SCRAM-SHA-1 challenge-response user authentication mechanism
+
+```nim
+
+var db: Database[Mongo]
+try:
+    db = newMongoDatabase("mongodb://$1:$2@localhost:27017/db" % [db_user,db_pass])
+    if not db.client.authenticated: raise newException(AUTHError, "Unable to authenticate to db")
+except:
+    logging.error(getCurrentExceptionMsg())
+    raise
+    
+```
 
 MongoDB Features
 ----------------

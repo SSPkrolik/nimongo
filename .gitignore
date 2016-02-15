@@ -6,4 +6,4 @@ bsontest
 query
 nimongotest
 profile_results.txt
-
+*.save
