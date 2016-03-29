@@ -144,6 +144,13 @@ converter toInt32*(x: Bson): int32 =
     ## Convert Bson to int32
     return x.valueInt32
 
+converter toInt*(x: Bson): int =
+    ## Convert Bson to int whether it is int32 or int64
+    if x.kind == BsonKindInt32:
+        return int(x.valueInt32)
+    else:
+        return int(x.valueInt64)
+
 converter toBson*(x: int): Bson =
     ## Convert int to Bson object
     return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
