@@ -215,6 +215,9 @@ proc oidToBytes*(x: Oid): string =
     result = newString(12).TaintedString
     copyMem(addr(result[0]), unsafeAddr x, 12)
 
+proc raiseWrongNodeException(bs: Bson) =
+    raise newException(Exception, "Wrong node kind: " & $bs.kind)
+
 proc bytes*(bs: Bson): string =
     ## Serialize Bson object into byte-stream
     case bs.kind
@@ -252,7 +255,7 @@ proc bytes*(bs: Bson): string =
         of BsonSubtypeUserDefined:
             return bs.kind & bs.key & char(0) & int32ToBytes(int32(bs.valueUserDefined.len())) & bs.subtype.char & bs.valueUserDefined
         else:
-            raise new(Exception)
+            raiseWrongNodeException(bs)
     of BsonKindUndefined:
         return bs.kind & bs.key & char(0)
     of BsonKindOid:
@@ -281,7 +284,7 @@ proc bytes*(bs: Bson): string =
         return bs.kind & bs.key & char(0)
     else:
         echo "BYTES: ", bs.kind
-        raise new(Exception)
+        raiseWrongNodeException(bs)
 
 proc `$`*(bs: Bson): string =
     ## Serialize Bson document into readable string
@@ -323,7 +326,7 @@ proc `$`*(bs: Bson): string =
             of BsonSubtypeUserDefined:
                 return "\"$#\": {\"$$bindata\": \"$#\"}" % [bs.key, base64.encode(bs.valueUserDefined)]
             else:
-                raise new(Exception)
+                raiseWrongNodeException(bs)
         of BsonKindUndefined:
             return "\"$#\": null" % [bs.key]
         of BsonKindOid:
@@ -355,7 +358,7 @@ proc `$`*(bs: Bson): string =
             return "\"$#\": {\"$$maxkey\": 1}" % [bs.key]
         else:
             echo bs.kind
-            raise new(Exception)
+            raiseWrongNodeException(bs)
     return stringify(bs)
 
 proc initBsonDocument*(): Bson =
@@ -500,7 +503,7 @@ proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
           value.key = key
           result.valueDocument.add(value)
   else:
-      raise new(Exception)
+      raiseWrongNodeException(bs)
 
 proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
     ## Add array field to bson object
@@ -534,7 +537,7 @@ proc `[]`*(bs: Bson, key: string): Bson =
             if item.key == key:
                 return item
     else:
-        raise new(Exception)
+        raiseWrongNodeException(bs)
 
 proc `[]=`*(bs: Bson, key: string, value: Bson) =
   ## Modify Bson document field
@@ -548,14 +551,14 @@ proc `[]=`*(bs: Bson, key: string, value: Bson) =
     newValue.key = key
     bs.valueDocument.add(newValue)
   else:
-    raise new(Exception)
+      raiseWrongNodeException(bs)
 
 proc `[]`*(bs: Bson, key: int): Bson =
     ## Get Bson array item by index
     if bs.kind == BsonKindArray:
         return bs.valueArray[key]
     else:
-        raise new(Exception)
+        raiseWrongNodeException(bs)
 
 proc `[]=`*(bs: Bson, key: int, value: Bson) =
     ## Modify Bson array element
@@ -625,7 +628,7 @@ proc initBsonDocument*(bytes: string): Bson =
             of BsonSubtype.BsonSubtypeUserDefined:
                 return doc(name.string, binuser(s.readStr(ds)))
             else:
-                raise new(Exception)
+                raise newException(Exception, "Unexpected subtype: " & $st)
         of BsonKindUndefined:
             return doc(name.string, undefined())
         of BsonKindOid:
@@ -662,7 +665,7 @@ proc initBsonDocument*(bytes: string): Bson =
         of BsonKindMaximumKey:
             return doc(name.string, maxkey())
         else:
-            raise new(Exception)
+            raise newException(Exception, "Unexpected kind: " & $kind)
 
     while stream.peekChar() != 0.char:
         document = parseBson(stream, document)
