@@ -530,6 +530,27 @@ proc add*[T](bs: Bson, value: T): Bson =
     val.key = $len(bs.valueArray)
     result.valueArray.add(val)
 
+proc del*(bs: Bson, key: string) =
+    if bs.kind == BsonKindDocument:
+        for i, item in bs.valueDocument:
+            if item.key == key:
+                bs.valueDocument.delete(i)
+                break
+    else:
+        raiseWrongNodeException(bs)
+
+proc delete*(bs: Bson, idx: int) =
+    if bs.kind == BsonKindArray:
+        bs.valueArray.delete(idx)
+    else:
+        raiseWrongNodeException(bs)
+
+proc del*(bs: Bson, idx: int) =
+    if bs.kind == BsonKindArray:
+        bs.valueArray.del(idx)
+    else:
+        raiseWrongNodeException(bs)
+
 proc `[]`*(bs: Bson, key: string): Bson =
     ## Get Bson document field
     if bs.kind == BsonKindDocument:
