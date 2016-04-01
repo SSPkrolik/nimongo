@@ -12,22 +12,27 @@ You can use `nimble` package manager to install `nimongo`. The most recent
 version of the library can be installed like this:
 
 ```bash
+$ nimble install nimongo
+```
+
+or directly from Git repo:
+
+```bash
 $ nimble install https://github.com/SSPkrolik/nimongo.git
 ```
 
-Later, when the driver becomes usable, `nimongo` will enter `nimble` package
-list.
-
 > WARNING! Current `master` version of `nimongo` works only with the
 > latest version of Nim from git repo: `devel` branch.
+> Also nimongo is intended to support MongoDB versions >= 3.0.
 
 Current status (briefly)
 ------------------------
 
 Currently `nimongo.mongo` implements connection to single MongoDB server, and
 support for most widely used queries (whole CRUD with some exceptions),
+
 `nimongo.bson` gives full support of current BSON specification. As for
-performance, it is comparable with `pymongo` Python driver on crude timeit-style
+performance, it is comparable with `pymongo` Python driver on rough timeit-style
 tests.
 
 Usage of synchronous client
@@ -177,7 +182,6 @@ depending on what is more convenient for you.
 
 
 ```nim
-
 let doc = B("name", "John")("surname", "Smith")("salary", 100)
 let doc2 = B(
     "name", "Sam")(
