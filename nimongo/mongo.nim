@@ -154,13 +154,21 @@ proc newCursor[T](c: Collection[T]): Cursor[T] =
     result.nskip = 0
     result.nlimit = 0
 
-proc buildMessageHeader(messageLength: int32, requestId: int32, responseTo: int32): string =
+proc buildMessageHeader(messageLength, requestId, responseTo: int32, res: var string) =
     ## Build Mongo message header as a series of bytes
-    result = int32ToBytes(messageLength) & int32ToBytes(requestId) & int32ToBytes(responseTo) & int32ToBytes(OP_QUERY)
+    int32ToBytes(messageLength, res)
+    int32ToBytes(requestId, res)
+    int32ToBytes(responseTo, res)
+    int32ToBytes(OP_QUERY, res)
 
-proc buildMessageQuery(flags: int32, fullCollectionName: string, numberToSkip: int32, numberToReturn: int32): string =
+proc buildMessageQuery(flags: int32, fullCollectionName: string,
+        numberToSkip, numberToReturn: int32, res: var string) =
     ## Build Mongo query message
-    return int32ToBytes(flags) & fullCollectionName & char(0) & int32ToBytes(numberToSkip) & int32ToBytes(numberToReturn)
+    int32ToBytes(flags, res)
+    res &= fullCollectionName
+    res &= char(0)
+    int32ToBytes(numberToSkip, res)
+    int32ToBytes(numberToReturn, res)
 
 # === Mongo client API === #
 
@@ -381,9 +389,14 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
   let squery = f.query.bytes()
   let sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
 
-  let msgHeader = buildMessageHeader(int32(29 + len($(f.collection)) + squery.len() + sfields.len()), f.collection.client.nextRequestId(), 0)
+  result = ""
+  let colName = $f.collection
+  buildMessageHeader(int32(29 + colName.len + squery.len + sfields.len),
+    f.collection.client.nextRequestId(), 0, result)
 
-  result = msgHeader & buildMessageQuery(0, $(f.collection), numberToSkip , numberToReturn) & squery & sfields
+  buildMessageQuery(0, colName, numberToSkip , numberToReturn, result)
+  result &= squery
+  result &= sfields
 
 iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int32): Bson {.closure.} =
   ## Private procedure for performing actual query to Mongo
