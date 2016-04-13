@@ -8,6 +8,7 @@ import sequtils
 import streams
 import strutils
 import times
+import tables
 
 import timeit
 
@@ -65,11 +66,10 @@ type
     timestamp*: int32
 
   Bson* = ref object of RootObj  ## Bson Node
-    key: string
     case kind*: BsonKind
     of BsonKindDouble:           valueFloat64:     float64
     of BsonKindStringUTF8:       valueString:      string
-    of BsonKindDocument:         valueDocument:    seq[Bson]
+    of BsonKindDocument:         valueDocument:    OrderedTable[string, Bson]
     of BsonKindArray:            valueArray:       seq[Bson]
     of BsonKindBinary:
       case subtype:                                BsonSubtype
@@ -106,7 +106,7 @@ type
 
 converter toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
-    return Bson(key: "", kind: BsonKindOid, valueOid: x)
+    return Bson(kind: BsonKindOid, valueOid: x)
 
 converter toOid*(x: Bson): Oid =
     ## Convert Bson to Mongo Object ID
@@ -114,7 +114,7 @@ converter toOid*(x: Bson): Oid =
 
 converter toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
-    return Bson(key: "", kind: BsonKindDouble, valueFloat64: x)
+    return Bson(kind: BsonKindDouble, valueFloat64: x)
 
 converter toFloat64*(x: Bson): float64 =
     ## Convert Bson object to float64
@@ -122,7 +122,7 @@ converter toFloat64*(x: Bson): float64 =
 
 converter toBson*(x: string): Bson =
     ## Convert string to Bson object
-    return Bson(key: "", kind: BsonKindStringUTF8, valueString: x)
+    return Bson(kind: BsonKindStringUTF8, valueString: x)
 
 converter toString*(x: Bson): string =
     ## Convert Bson to UTF8 string
@@ -130,7 +130,7 @@ converter toString*(x: Bson): string =
 
 converter toBson*(x: int64): Bson =
     ## Convert int64 to Bson object
-    return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
+    return Bson(kind: BsonKindInt64, valueInt64: x)
 
 converter toInt64*(x: Bson): int64 =
     ## Convert Bson object to int
@@ -138,7 +138,7 @@ converter toInt64*(x: Bson): int64 =
 
 converter toBson*(x: int32): Bson =
     ## Convert int32 to Bson object
-    return Bson(key: "", kind: BsonKindInt32, valueInt32: x)
+    return Bson(kind: BsonKindInt32, valueInt32: x)
 
 converter toInt32*(x: Bson): int32 =
     ## Convert Bson to int32
@@ -153,11 +153,11 @@ converter toInt*(x: Bson): int =
 
 converter toBson*(x: int): Bson =
     ## Convert int to Bson object
-    return Bson(key: "", kind: BsonKindInt64, valueInt64: x)
+    return Bson(kind: BsonKindInt64, valueInt64: x)
 
 converter toBson*(x: bool): Bson =
     ## Convert bool to Bson object
-    return Bson(key: "", kind: BsonKindBool, valueBool: x)
+    return Bson(kind: BsonKindBool, valueBool: x)
 
 converter toBool*(x: Bson): bool =
     ## Convert Bson object to bool
@@ -165,7 +165,7 @@ converter toBool*(x: Bson): bool =
 
 converter toBson*(x: Time): Bson =
     ## Convert Time to Bson object
-    return Bson(key: "", kind: BsonKindTimeUTC, valueTime: x)
+    return Bson(kind: BsonKindTimeUTC, valueTime: x)
 
 converter toTime*(x: Bson): Time =
     ## Convert Bson object to Time
@@ -173,7 +173,7 @@ converter toTime*(x: Bson): Time =
 
 converter toBson*(x: BsonTimestamp): Bson =
     ## Convert inner BsonTimestamp to Bson object
-    return Bson(key: "", kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
+    return Bson(kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
 
 converter toTimestamp*(x: Bson): BsonTimestamp =
     ## Convert Bson object to inner BsonTimestamp type
@@ -181,204 +181,223 @@ converter toTimestamp*(x: Bson): BsonTimestamp =
 
 converter toBson*(x: MD5Digest): Bson =
     ## Convert MD5Digest to Bson object
-    return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
+    return Bson(kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
 
 converter toBson*(x: var MD5Context): Bson =
     ## Convert MD5Context to Bson object (still digest from current context).
     ## :WARNING: MD5Context is finalized during conversion.
     var digest: MD5Digest
     x.md5Final(digest)
-    return Bson(key: "", kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: digest)
+    return Bson(kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: digest)
 
-proc int32ToBytes*(x: int32): string =
+proc podValueToBytesAtOffset[T](x: T, res: var string, off: int) {.inline.} =
+    assert(off + sizeof(x) <= res.len)
+    copyMem(addr res[off], unsafeAddr x, sizeof(x))
+
+proc podValueToBytes[T](x: T, res: var string) {.inline.} =
+    let off = res.len
+    res.setLen(off + sizeof(x))
+    podValueToBytesAtOffset(x, res, off)
+
+proc int32ToBytesAtOffset*(x: int32, res: var string, off: int) =
+    podValueToBytesAtOffset(x, res, off)
+
+proc int32ToBytes*(x: int32, res: var string) {.inline.} =
     ## Convert int32 data piece into series of bytes
-    result = newString(4).TaintedString
-    copyMem(addr(result[0]), unsafeAddr x, 4)
+    podValueToBytes(x, res)
 
-proc float64ToBytes*(x: float64): string =
+proc float64ToBytes*(x: float64, res: var string) {.inline.} =
     ## Convert float64 data piece into series of bytes
-    result = newString(8).TaintedString
-    copyMem(addr(result[0]), unsafeAddr x, 8)
+    podValueToBytes(x, res)
 
-proc int64ToBytes*(x: int64): string =
+proc int64ToBytes*(x: int64, res: var string) {.inline.} =
     ## Convert int64 data piece into series of bytes
-    result = newString(8).TaintedString
-    copyMem(addr(result[0]), unsafeAddr x, 8)
+    podValueToBytes(x, res)
 
-proc boolToBytes*(x: bool): string =
+proc boolToBytes*(x: bool, res: var string) {.inline.} =
     ## Convert bool data piece into series of bytes
-    if x == true: return $char(1)
-    else: return $char(0)
+    podValueToBytes(if x: 1'u8 else: 0'u8, res)
 
-proc oidToBytes*(x: Oid): string =
+proc oidToBytes*(x: Oid, res: var string) {.inline.} =
     ## Convert Mongo Object ID data piece into series to bytes
-    result = newString(12).TaintedString
-    copyMem(addr(result[0]), unsafeAddr x, 12)
+    podValueToBytes(x, res)
 
 proc raiseWrongNodeException(bs: Bson) =
     raise newException(Exception, "Wrong node kind: " & $bs.kind)
 
-proc bytes*(bs: Bson): string =
+proc toBytes*(bs: Bson, res: var string) =
     ## Serialize Bson object into byte-stream
     case bs.kind
     of BsonKindDouble:
-        return bs.kind & bs.key & char(0) & float64ToBytes(bs.valueFloat64)
+        float64ToBytes(bs.valueFloat64, res)
     of BsonKindStringUTF8:
-        return bs.kind & bs.key & char(0) & int32ToBytes(len(bs.valueString).int32 + 1) & bs.valueString & char(0)
+        int32ToBytes(int32(bs.valueString.len + 1), res)
+        res &= bs.valueString
+        res &= char(0)
     of BsonKindDocument:
-        result = ""
-        for val in bs.valueDocument: result = result & bytes(val)
-        if bs.key != "":
-            result = result & char(0)
-            result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
-        else:
-            result = result & char(0)
-            result = int32ToBytes(int32(len(result) + 4)) & result
+        let off = res.len
+        res.setLen(off + sizeof(int32)) # We shall write the length in here...
+        for key, val in bs.valueDocument:
+            res &= val.kind
+            res &= key
+            res &= char(0)
+            val.toBytes(res)
+        res &= char(0)
+        int32ToBytesAtOffset(int32(res.len - off), res, off)
     of BsonKindArray:
-        result = ""
-        for val in bs.valueArray: result = result & bytes(val)
-        if bs.key != "":
-            result = result & char(0)
-            result = bs.kind & bs.key & char(0) & int32ToBytes(int32(len(result) + 4)) & result
-        else:
-            result = result & char(0)
-            result = int32ToBytes(int32(len(result) + 4)) & result
+        let off = res.len
+        res.setLen(off + sizeof(int32)) # We shall write the length in here...
+        for i, val in bs.valueArray:
+            res &= val.kind
+            res &= $i
+            res &= char(0)
+            val.toBytes(res)
+        res &= char(0)
+        int32ToBytesAtOffset(int32(res.len - off), res, off)
     of BsonKindBinary:
         case bs.subtype
         of BsonSubtypeMd5:
             var sdig: string = newStringOfCap(16)
             for i in 0..<bs.valueDigest.len():
                 add(sdig, bs.valueDigest[i].char)
-            return bs.kind & bs.key & char(0) & int32ToBytes(int32(16)) & bs.subtype.char & sdig
+            int32ToBytes(16, res)
+            res &= bs.subtype.char & sdig
         of BsonSubtypeGeneric:
-            return bs.kind & bs.key & char(0) & int32ToBytes(int32(bs.valueGeneric.len())) & bs.subtype.char & bs.valueGeneric
+            int32ToBytes(int32(bs.valueGeneric.len), res)
+            res &= bs.subtype.char & bs.valueGeneric
         of BsonSubtypeUserDefined:
-            return bs.kind & bs.key & char(0) & int32ToBytes(int32(bs.valueUserDefined.len())) & bs.subtype.char & bs.valueUserDefined
+            int32ToBytes(int32(bs.valueUserDefined.len), res)
+            res &= bs.subtype.char & bs.valueUserDefined
         else:
             raiseWrongNodeException(bs)
     of BsonKindUndefined:
-        return bs.kind & bs.key & char(0)
+        discard
     of BsonKindOid:
-        return bs.kind & bs.key & char(0) & oidToBytes(bs.valueOid)
+        oidToBytes(bs.valueOid, res)
     of BsonKindBool:
-        return bs.kind & bs.key & char(0) & boolToBytes(bs.valueBool)
+        boolToBytes(bs.valueBool, res)
     of BsonKindTimeUTC:
-        return bs.kind & bs.key & char(0) & int64ToBytes(int64(bs.valueTime.toSeconds() * 1000))
+        int64ToBytes(int64(bs.valueTime.toSeconds() * 1000), res)
     of BsonKindNull:
-        return bs.kind & bs.key & char(0)
+        discard
     of BsonKindRegexp:
-        return bs.kind & bs.key & char(0) & bs.regex & char(0) & bs.options & char(0)
+        res &= bs.regex & char(0) & bs.options & char(0)
     of BsonKindDBPointer:
-        return bs.kind & bs.key & char(0) & int32ToBytes(int32(len(bs.refCol)) + 1) & bs.refCol & char(0) & oidToBytes(bs.refOid)
+        int32ToBytes(int32(bs.refCol.len + 1), res)
+        res &= bs.refCol & char(0)
+        oidToBytes(bs.refOid, res)
     of BsonKindJSCode:
-        return bs.kind & bs.key & char(0) & int32ToBytes(int32(len(bs.valueCode)) + 1) & bs.valueCode & char(0)
+        int32ToBytes(int32(bs.valueCode.len + 1), res)
+        res &= bs.valueCode & char(0)
     of BsonKindInt32:
-        return bs.kind & bs.key & char(0) & int32ToBytes(bs.valueInt32)
+        int32ToBytes(bs.valueInt32, res)
     of BsonKindTimestamp:
-        return bs.kind & bs.key & char(0) & int64ToBytes(cast[ptr int64](addr bs.valueTimestamp)[])
+        int64ToBytes(cast[ptr int64](addr bs.valueTimestamp)[], res)
     of BsonKindInt64:
-        return bs.kind & bs.key & char(0) & int64ToBytes(bs.valueInt64)
-    of BsonKindMinimumKey:
-        return bs.kind & bs.key & char(0)
-    of BsonKindMaximumKey:
-        return bs.kind & bs.key & char(0)
+        int64ToBytes(bs.valueInt64, res)
+    of BsonKindMinimumKey, BsonKindMaximumKey:
+        discard
     else:
-        echo "BYTES: ", bs.kind
         raiseWrongNodeException(bs)
+
+proc `$`*(bs: Bson): string
+
+proc bytes*(bs: Bson): string =
+    result = ""
+    bs.toBytes(result)
 
 proc `$`*(bs: Bson): string =
     ## Serialize Bson document into readable string
-    var ident = ""
-    proc stringify(bs: Bson): string =
+    proc stringify(bs: Bson, indent: string): string =
         case bs.kind
         of BsonKindDouble:
-            return "\"$#\": $#" % [bs.key, $bs.valueFloat64]
+            return $bs.valueFloat64
         of BsonKindStringUTF8:
-            return "\"$#\": \"$#\"" % [bs.key, bs.valueString]
+            return "\"" & bs.valueString & "\""
         of BsonKindDocument:
-            var res: string = ""
-            if bs.key != "":
-                res = res & ident[0..len(ident) - 3] & "\"" & bs.key & "\":\n"
-            res = res & ident & "{\n"
-            ident = ident & "  "
-            for i, item in bs.valueDocument:
-                if i == len(bs.valueDocument) - 1: res = res & ident & stringify(item) & "\n"
-                else: res = res & ident & stringify(item) & ",\n"
-            ident = ident[0..len(ident) - 3]
-            res = res & ident & "}"
+            var res = "{\n"
+            let ln = bs.valueDocument.len
+            var i = 0
+            let newIndent = indent & "    "
+            for k, v in bs.valueDocument:
+                res &= newIndent
+                res &= "\"" & k & "\" : "
+                res &= stringify(v, newIndent)
+                if i != ln - 1:
+                    res &= ","
+                inc i
+                res &= "\n"
+            res &= indent & "}"
             return res
         of BsonKindArray:
-            var res: string = ""
-            res = res & "\"" & bs.key & "\": {"
-            ident = ident & "  "
-            for i, item in bs.valueArray:
-                if i == len(bs.valueArray) - 1: res = res & stringify(item)
-                else: res = res & stringify(item) & ", "
-            ident = ident[0..len(ident) - 3]
-            res = res & "}"
+            var res = "[\n"
+            let newIndent = indent & "    "
+            for i, v in bs.valueArray:
+                res &= newIndent
+                res &= stringify(v, newIndent)
+                if i != bs.valueArray.len - 1:
+                    res &= ","
+                res &= "\n"
+            res &= indent & "]"
             return res
         of BsonKindBinary:
             case bs.subtype
             of BsonSubtypeMd5:
-                return "\"$#\": {\"$$md5\": \"$#\"}" % [bs.key, $bs.valueDigest]
+                return "{\"$$md5\": \"$#\"}" % [$bs.valueDigest]
             of BsonSubtypeGeneric:
-                return "\"$#\": {\"$$bindata\": \"$#\"}" % [bs.key, base64.encode(bs.valueGeneric)]
+                return "{\"$$bindata\": \"$#\"}" % [base64.encode(bs.valueGeneric)]
             of BsonSubtypeUserDefined:
-                return "\"$#\": {\"$$bindata\": \"$#\"}" % [bs.key, base64.encode(bs.valueUserDefined)]
+                return "{\"$$bindata\": \"$#\"}" % [base64.encode(bs.valueUserDefined)]
             else:
                 raiseWrongNodeException(bs)
         of BsonKindUndefined:
-            return "\"$#\": null" % [bs.key]
+            return "undefined"
         of BsonKindOid:
-            return "\"$#\": {\"$$oid\": \"$#\"}" % [bs.key, $bs.valueOid]
+            return "{\"$$oid\": \"$#\"}" % [$bs.valueOid]
         of BsonKindBool:
-            return "\"$#\": $#" % [bs.key, if bs.valueBool == true: "true" else: "false"]
+            return if bs.valueBool == true: "true" else: "false"
         of BsonKindTimeUTC:
-            return "\"$#\": $#" % [bs.key, $bs.valueTime]
+            return $bs.valueTime
         of BsonKindNull:
-            return "\"$#\": null" % [bs.key]
+            return "null"
         of BsonKindRegexp:
-            return "\"$#\": {\"$$regex\": \"$#\", \"$$options\": \"$#\"}" % [bs.key, bs.regex, bs.options]
+            return "{\"$$regex\": \"$#\", \"$$options\": \"$#\"}" % [bs.regex, bs.options]
         of BsonKindDBPointer:
             let
               refcol = bs.refCol.split(".")[1]
               refdb  = bs.refCol.split(".")[0]
-            return "\"$#\": {\"$$ref\": \"$#\", \"$$id\": \"$#\", \"$$db\": \"$#\"}" % [bs.key, refcol, $bs.refOid, refdb]
+            return "{\"$$ref\": \"$#\", \"$$id\": \"$#\", \"$$db\": \"$#\"}" % [refcol, $bs.refOid, refdb]
         of BsonKindJSCode:
-            return "\"$#\": $#" % [bs.key, bs.valueCode] ## TODO: make valid JSON here
+            return bs.valueCode ## TODO: make valid JSON here
         of BsonKindInt32:
-            return "\"$#\": $#" % [bs.key, $bs.valueInt32]
+            return $bs.valueInt32
         of BsonKindTimestamp:
-            return "\"$#\": {\"$$timestamp\": $#}" % [bs.key, $(cast[ptr int64](addr bs.valueTimestamp)[])]
+            return "{\"$$timestamp\": $#}" % [$(cast[ptr int64](addr bs.valueTimestamp)[])]
         of BSonKindInt64:
-            return "\"$#\": $#" % [bs.key, $bs.valueInt64]
+            return $bs.valueInt64
         of BsonKindMinimumKey:
-            return "\"$#\": {\"$$minkey\": 1}" % [bs.key]
+            return "{\"$$minkey\": 1}"
         of BsonKindMaximumKey:
-            return "\"$#\": {\"$$maxkey\": 1}" % [bs.key]
+            return "{\"$$maxkey\": 1}"
         else:
-            echo bs.kind
             raiseWrongNodeException(bs)
-    return stringify(bs)
+    return stringify(bs, "")
 
 proc initBsonDocument*(): Bson =
     ## Create new top-level Bson document
     result.new
-    result.key = ""
     result.kind = BsonKindDocument
-    result.valueDocument = @[]
+    result.valueDocument = initOrderedTable[string, Bson]()
 
 proc newBsonDocument*(): Bson =
     ## Create new empty Bson document
     result.new
-    result.key = ""
     result.kind = BsonKindDocument
-    result.valueDocument = @[]
+    result.valueDocument = initOrderedTable[string, Bson]()
 
 proc initBsonArray*(): Bson =
     ## Create new Bson array
     result = Bson(
-        key: "",
         kind: BsonKindArray,
         valueArray: newSeq[Bson]()
     )
@@ -415,48 +434,47 @@ proc toBson(x: NimNode, child: NimNode = nil): NimNode =
   else:
     return x
 
-macro `%*`*(x: expr): expr =
+macro `%*`*(x: expr): Bson =
     ## Perform dict-like structure conversion into bson
     result = toBson(x)
 
-template B*(key: string, val: Bson): expr =  ## Shortcut for _initBsonDocument
+template B*(key: string, val: Bson): Bson =  ## Shortcut for _initBsonDocument
     initBsonDocument()(key, val)
 
-template B*[T](key: string, values: seq[T]): expr =
+template B*[T](key: string, values: seq[T]): Bson =
     initBsonDocument()(key, values)
 
 proc dbref*(refcol: string, refoid: Oid): Bson =
     ## Create new DBRef (database reference) MongoDB bson type
-    return Bson(key: "", kind: BsonKindDBPointer, refcol: refcol, refoid: refoid)
+    return Bson(kind: BsonKindDBPointer, refcol: refcol, refoid: refoid)
 
 proc undefined*(): Bson =
     ## Create new Bson 'undefined' value
-    return Bson(key: "", kind: BsonKindUndefined)
+    return Bson(kind: BsonKindUndefined)
 
 proc null*(): Bson =
     ## Create new Bson 'null' value
-    return Bson(key: "", kind: BsonKindNull)
+    return Bson(kind: BsonKindNull)
 
 proc minkey*(): Bson =
     ## Create new Bson value representing 'Min key' bson type
-    return Bson(key: "", kind: BsonKindMinimumKey)
+    return Bson(kind: BsonKindMinimumKey)
 
 proc maxkey*(): Bson =
     ## Create new Bson value representing 'Max key' bson type
-    return Bson(key: "", kind: BsonKindMaximumKey)
+    return Bson(kind: BsonKindMaximumKey)
 
 proc regex*(pattern: string, options: string): Bson =
     ## Create new Bson value representing Regexp bson type
-    return Bson(key: "", kind: BsonKindRegexp, regex: pattern, options: options)
+    return Bson(kind: BsonKindRegexp, regex: pattern, options: options)
 
 proc js*(code: string): Bson =
     ## Create new Bson value representing JavaScript code bson type
-    return Bson(key: "", kind: BsonKindJSCode, valueCode: code)
+    return Bson(kind: BsonKindJSCode, valueCode: code)
 
 proc bin*(bindata: string): Bson =
     ## Create new binary Bson object with 'generic' subtype
     return Bson(
-        key: "",
         kind: BsonKindBinary,
         subtype: BsonSubtypeGeneric,
         valueGeneric: bindata
@@ -468,7 +486,6 @@ proc binstr*(x: Bson): string =
 proc binuser*(bindata: string): Bson =
     ## Create new binray Bson object with 'user-defined' subtype
     return Bson(
-        key: "",
         kind: BsonKindBinary,
         subtype: BsonSubtype.BsonSubtypeUserDefined,
         valueUserDefined: bindata
@@ -477,7 +494,6 @@ proc binuser*(bindata: string): Bson =
 proc geo*(loc: GeoPoint): Bson =
     ## Convert array of two floats into Bson as MongoDB Geo-Point.
     return Bson(
-        key: "",
         kind: BsonKindArray,
         valueArray: @[loc[0].toBson(), loc[1].toBson()]
     )
@@ -485,7 +501,6 @@ proc geo*(loc: GeoPoint): Bson =
 proc timeUTC*(time: Time): Bson =
   ## Create UTC datetime Bson object.
   return Bson(
-    key: "",
     kind: BsonKindTimeUTC,
     valueTime: time
   )
@@ -495,13 +510,9 @@ proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   result = bs
   if bs.kind == BsonKindDocument:
       if not isNil(val):
-          var value: Bson = val
-          value.key = key
-          result.valueDocument.add(value)
+          result.valueDocument[key] = val
       else:
-          var value: Bson = null()
-          value.key = key
-          result.valueDocument.add(value)
+          result.valueDocument[key] = null()
   else:
       raiseWrongNodeException(bs)
 
@@ -511,31 +522,18 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
 
     var arr: Bson = initBsonArray()
 
-    arr.kind = BsonKindArray
-    arr.valueArray = @[]
-    arr.key = key
+    for val in values:
+        arr.valueArray.add(val)
 
-    var counter = 0
-    for val in values.items():
-        var tmpVal: Bson = val
-        tmpVal.key = $counter
-        arr.valueArray.add(tmpVal)
-        inc(counter)
+    result.valueDocument[key] = arr
 
-    result.valueDocument.add(arr)
-
-proc add*[T](bs: Bson, value: T): Bson =
+proc add*[T](bs: Bson, value: T): Bson {.discardable.} =
     result = bs
-    var val: Bson = value
-    val.key = $len(bs.valueArray)
-    result.valueArray.add(val)
+    result.valueArray.add(value)
 
 proc del*(bs: Bson, key: string) =
     if bs.kind == BsonKindDocument:
-        for i, item in bs.valueDocument:
-            if item.key == key:
-                bs.valueDocument.delete(i)
-                break
+        bs.valueDocument.del(key)
     else:
         raiseWrongNodeException(bs)
 
@@ -554,23 +552,14 @@ proc del*(bs: Bson, idx: int) =
 proc `[]`*(bs: Bson, key: string): Bson =
     ## Get Bson document field
     if bs.kind == BsonKindDocument:
-        for item in bs.valueDocument:
-            if item.key == key:
-                return item
+        return bs.valueDocument.getOrDefault(key)
     else:
         raiseWrongNodeException(bs)
 
 proc `[]=`*(bs: Bson, key: string, value: Bson) =
   ## Modify Bson document field
   if bs.kind == BsonKindDocument:
-    for i in 0 .. < bs.valueDocument.len():
-      if bs.valueDocument[i].key == key:
-        bs.valueDocument[i] = value
-        bs.valueDocument[i].key = key
-        return
-    var newValue: Bson = value
-    newValue.key = key
-    bs.valueDocument.add(newValue)
+      bs.valueDocument[key] = value
   else:
       raiseWrongNodeException(bs)
 
@@ -589,8 +578,8 @@ proc `[]=`*(bs: Bson, key: int, value: Bson) =
 iterator items*(bs: Bson): Bson =
     ## Iterate over Bson document or array fields
     if bs.kind == BsonKindDocument:
-        for item in bs.valueDocument:
-            yield item
+        for _, v in bs.valueDocument:
+            yield v
     elif bs.kind == BsonKindArray:
         for item in bs.valueArray:
             yield item
@@ -598,10 +587,7 @@ iterator items*(bs: Bson): Bson =
 proc contains*(bs: Bson, key: string): bool =
   ## Checks if Bson document has a specified field
   if bs.kind == BsonKindDocument:
-    for field in bs.valueDocument.items():
-      if key == field.key:
-        return true
-    return false
+    return key in bs.valueDocument
   else:
     return false
 
@@ -635,7 +621,8 @@ proc initBsonDocument*(bytes: string): Bson =
             let ds: int32 = stream.peekInt32()
             var subdoc = initBsonDocument(s.readStr(ds))
             var subarr = initBsonArray()
-            subarr.valueArray = subdoc.valueDocument
+            subarr.valueArray = @[]
+            for k, v in subdoc.valueDocument: subarr.valueArray.add(v)
             return doc(name.string, subarr)
         of BsonKindBinary:
             let
@@ -658,7 +645,7 @@ proc initBsonDocument*(bytes: string): Bson =
         of BsonKindBool:
             return doc(name.string, if s.readChar() == 0.char: false else: true)
         of BsonKindTimeUTC:
-            let timeUTC: Bson = Bson(key: name, kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
+            let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
             return doc(name.string, timeUTC)
         of BsonKindNull:
             return doc(name.string, null())
