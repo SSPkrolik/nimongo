@@ -584,6 +584,12 @@ iterator items*(bs: Bson): Bson =
         for item in bs.valueArray:
             yield item
 
+iterator pairs*(bs: Bson): tuple[key: string, val: Bson] =
+    ## Iterate over Bson document
+    if bs.kind == BsonKindDocument:
+        for k, v in bs.valueDocument:
+            yield (k, v)
+
 proc contains*(bs: Bson, key: string): bool =
   ## Checks if Bson document has a specified field
   if bs.kind == BsonKindDocument:
