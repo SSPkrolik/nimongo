@@ -51,10 +51,10 @@ suite "Mongo instance administration commands test suite":
 
   test "[ASYNC] [SYNC] Command: 'listCollections'":
     let sclist = sdb.listCollections()
-    check(sclist.len() == 2)
+    check(sclist.len() == 1)
 
     let aclist = waitFor(adb.listCollections())
-    check(aclist.len() == 2)
+    check(aclist.len() == 1)
 
   test "[ASYNC] [SYNC] Command: 'create' collection":
     discard sdb.createCollection("smanual")

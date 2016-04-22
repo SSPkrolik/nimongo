@@ -148,9 +148,9 @@ converter toInt64*(x: Bson): int64 =
     ## Convert Bson object to int
     case x.kind
     of BsonKindInt64:
-        return int64(x.valueInt32)
-    of BsonKindInt32:
         return int64(x.valueInt64)
+    of BsonKindInt32:
+        return int64(x.valueInt32)
     else:
         raiseWrongNodeException(x)
 
@@ -162,9 +162,9 @@ converter toInt32*(x: Bson): int32 =
     ## Convert Bson to int32
     case x.kind
     of BsonKindInt64:
-        return int32(x.valueInt32)
-    of BsonKindInt32:
         return int32(x.valueInt64)
+    of BsonKindInt32:
+        return int32(x.valueInt32)
     else:
         raiseWrongNodeException(x)
 
@@ -172,9 +172,9 @@ converter toInt*(x: Bson): int =
     ## Convert Bson to int whether it is int32 or int64
     case x.kind
     of BsonKindInt64:
-        return int(x.valueInt32)
-    of BsonKindInt32:
         return int(x.valueInt64)
+    of BsonKindInt32:
+        return int(x.valueInt32)
     else:
         raiseWrongNodeException(x)
 
