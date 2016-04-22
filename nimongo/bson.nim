@@ -104,6 +104,9 @@ type
 
   GeoPoint = array[0..1, float64]   ## Represents Mongo Geo Point
 
+proc raiseWrongNodeException(bs: Bson) =
+    raise newException(Exception, "Wrong node kind: " & $bs.kind)
+
 converter toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
     return Bson(kind: BsonKindOid, valueOid: x)
@@ -122,11 +125,20 @@ converter toFloat64*(x: Bson): float64 =
 
 converter toBson*(x: string): Bson =
     ## Convert string to Bson object
-    return Bson(kind: BsonKindStringUTF8, valueString: x)
+    if x == nil:
+        return Bson(kind: BsonKindNull)
+    else:
+        return Bson(kind: BsonKindStringUTF8, valueString: x)
 
 converter toString*(x: Bson): string =
     ## Convert Bson to UTF8 string
-    return x.valueString
+    case x.kind
+    of BsonKindStringUTF8:
+        return x.valueString
+    of BsonKindNull:
+        return nil
+    else:
+        raiseWrongNodeException(x)
 
 converter toBson*(x: int64): Bson =
     ## Convert int64 to Bson object
@@ -134,7 +146,13 @@ converter toBson*(x: int64): Bson =
 
 converter toInt64*(x: Bson): int64 =
     ## Convert Bson object to int
-    return x.valueInt64
+    case x.kind
+    of BsonKindInt64:
+        return int64(x.valueInt32)
+    of BsonKindInt32:
+        return int64(x.valueInt64)
+    else:
+        raiseWrongNodeException(x)
 
 converter toBson*(x: int32): Bson =
     ## Convert int32 to Bson object
@@ -142,14 +160,23 @@ converter toBson*(x: int32): Bson =
 
 converter toInt32*(x: Bson): int32 =
     ## Convert Bson to int32
-    return x.valueInt32
+    case x.kind
+    of BsonKindInt64:
+        return int32(x.valueInt32)
+    of BsonKindInt32:
+        return int32(x.valueInt64)
+    else:
+        raiseWrongNodeException(x)
 
 converter toInt*(x: Bson): int =
     ## Convert Bson to int whether it is int32 or int64
-    if x.kind == BsonKindInt32:
+    case x.kind
+    of BsonKindInt64:
         return int(x.valueInt32)
-    else:
+    of BsonKindInt32:
         return int(x.valueInt64)
+    else:
+        raiseWrongNodeException(x)
 
 converter toBson*(x: int): Bson =
     ## Convert int to Bson object
@@ -221,9 +248,6 @@ proc boolToBytes*(x: bool, res: var string) {.inline.} =
 proc oidToBytes*(x: Oid, res: var string) {.inline.} =
     ## Convert Mongo Object ID data piece into series to bytes
     podValueToBytes(x, res)
-
-proc raiseWrongNodeException(bs: Bson) =
-    raise newException(Exception, "Wrong node kind: " & $bs.kind)
 
 proc toBytes*(bs: Bson, res: var string) =
     ## Serialize Bson object into byte-stream
