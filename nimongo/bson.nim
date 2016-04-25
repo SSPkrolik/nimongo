@@ -599,6 +599,24 @@ proc `[]=`*(bs: Bson, key: int, value: Bson) =
     if bs.kind == BsonKindArray:
         bs.valueArray[key] = value
 
+proc `{}`*(bs: Bson, keys: varargs[string]): Bson =
+  var b = bs
+  for k in keys:
+    if b.kind == BsonKindDocument:
+      b = b.valueDocument.getOrDefault(k)
+      if b.isNil: return nil
+    else:
+      return nil
+  return b
+
+proc `{}=`*(bs: Bson, keys: varargs[string], value: Bson) =
+  var bs = bs
+  for i in 0..(keys.len-2):
+    if isNil(bs[keys[i]]):
+      bs[keys[i]] = newBsonDocument()
+    bs = bs[keys[i]]
+  bs[keys[^1]] = value
+
 iterator items*(bs: Bson): Bson =
     ## Iterate over Bson document or array fields
     if bs.kind == BsonKindDocument:
