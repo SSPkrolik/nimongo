@@ -1,4 +1,4 @@
-nimongo - Pure Nim MongoDB Driver
+nimongo - Pure Nim MongoDB Driver [![Build Status](https://travis-ci.org/SSPkrolik/nimongo.svg?branch=master)](https://travis-ci.org/SSPkrolik/nimongo)
 ===================================
 
 `nimongo` has a main intention to provide developer-friendly way to interact
