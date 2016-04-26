@@ -333,6 +333,7 @@ proc bytes*(bs: Bson): string =
 proc `$`*(bs: Bson): string =
     ## Serialize Bson document into readable string
     proc stringify(bs: Bson, indent: string): string =
+        if bs.isNil: return "null"
         case bs.kind
         of BsonKindDouble:
             return $bs.valueFloat64
