@@ -90,7 +90,7 @@ type
     sock:          Socket
     authenticated*: bool
 
-  AsyncLockedSocket = object
+  AsyncLockedSocket = ref object
     inuse:         bool
     authenticated: bool
     sock:          AsyncSocket
@@ -235,6 +235,7 @@ proc next(am: AsyncMongo): Future[AsyncLockedSocket] {.async.} =
     for _ in 0..<am.pool.len():
       am.current = (am.current + 1) mod am.pool.len()
       if not am.pool[am.current].inuse:
+        am.pool[am.current].inuse = true
         return am.pool[am.current]
     await sleepAsync(1)
 
@@ -434,10 +435,8 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
 
 proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
   ## Private procedure for performing actual query to Mongo via async client
-  var ls: AsyncLockedSocket
-  ls = await f.collection.client.next()
+  var ls: AsyncLockedSocket = await f.collection.client.next()
 
-  ls.inuse = true
   await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
   ## Read Length
   var
@@ -446,7 +445,6 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
   let messageLength: int32 = stream.readInt32()
 
   ## Read data
-  data = newStringOfCap(messageLength - 4)
   data = await ls.sock.recv(messageLength - 4)
 
   ls.inuse = false
