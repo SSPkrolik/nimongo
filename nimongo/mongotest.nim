@@ -49,19 +49,21 @@ suite "Mongo instance administration commands test suite":
     check("testdb" in waitFor(am.listDatabases()))
     sco.remove(%*{"test": "test"}, limit=1)
 
-  test "[ASYNC] [SYNC] Command: 'listCollections'":
-    let sclist = sdb.listCollections()
-    check(sclist.len() == 1)
-
-    let aclist = waitFor(adb.listCollections())
-    check(aclist.len() == 1)
-
   test "[ASYNC] [SYNC] Command: 'create' collection":
     discard sdb.createCollection("smanual")
     check("smanual" in sdb.listCollections())
 
     discard waitFor(adb.createCollection("amanual"))
     check("smanual" in waitFor(adb.listCollections()))
+
+  test "[ASYNC] [SYNC] Command: 'listCollections'":
+    let sclist = sdb.listCollections()
+    check("amanual" in sclist)
+    check("smanual" in sclist)
+
+    let aclist = waitFor(adb.listCollections())
+    check("amanual" in aclist)
+    check("smanual" in aclist)
 
   test "[ASYNC] [SYNC] Command: 'renameCollection'":
     check(sco.insert(%*{}))
