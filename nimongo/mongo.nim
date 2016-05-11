@@ -945,12 +945,12 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
       result = newString(d.len)
       copyMem(addr result[0], unsafeAddr d[0], d.len)
 
-  let client_key = hmac_sha1(saltedPass, "Client Key")
+  let client_key = Sha1Digest(hmac_sha1(saltedPass, "Client Key"))
   let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
 
   let auth_msg = join([fb, responsePayload, withoutProof], ",")
 
-  let client_sig = hmac_sha1(stored_key, auth_msg)
+  let client_sig = Sha1Digest(hmac_sha1(stored_key, auth_msg))
 
   var toEncode = newString(20)
   for i in 0..<client_key.len():
@@ -966,8 +966,8 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   }
   let responseContinue1 =  db["$cmd"].find(requestContinue1).one()
 
-  let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
-  let server_sig = base64.encode(stringWithSHA1Digest(hmac_sha1(server_key, auth_msg)))
+  let server_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(salted_pass, "Server Key")))
+  let server_sig = base64.encode(stringWithSHA1Digest(Sha1Digest(hmac_sha1(server_key, auth_msg))))
 
   parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
 
@@ -1032,12 +1032,12 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     result = newString(d.len)
     copyMem(addr result[0], unsafeAddr d[0], d.len)
 
-  let client_key = hmac_sha1(saltedPass, "Client Key")
+  let client_key = Sha1Digest(hmac_sha1(saltedPass, "Client Key"))
   let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
 
   let auth_msg = join([fb, responsePayload, withoutProof], ",")
 
-  let client_sig = hmac_sha1(stored_key, auth_msg)
+  let client_sig = Sha1Digest(hmac_sha1(stored_key, auth_msg))
 
   var toEncode = newString(20)
   for i in 0..<client_key.len():
@@ -1053,8 +1053,8 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
   }
   let responseContinue1 = await db["$cmd"].find(requestContinue1).one()
 
-  let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
-  let server_sig = base64.encode(stringWithSHA1Digest(hmac_sha1(server_key, auth_msg)))
+  let server_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(salted_pass, "Server Key")))
+  let server_sig = base64.encode(stringWithSHA1Digest(Sha1Digest(hmac_sha1(server_key, auth_msg))))
 
   parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
 
