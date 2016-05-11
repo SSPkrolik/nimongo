@@ -645,13 +645,11 @@ converter seqCharToString(x: openarray[char]): string =
     result = newStringOfCap(len(x))
     for c in x: result = result & c
 
-proc initBsonDocument*(bytes: string): Bson =
+proc initBsonDocument*(stream: Stream): Bson =
     ## Create new Bson document from byte stream
-    let stream: Stream = newStringStream(bytes)
     discard stream.readInt32()   ## docSize
-    var document: Bson = initBsonDocument()
 
-    let parseBson = proc(s: Stream, doc: Bson): Bson =
+    proc parseBson(s: Stream, doc: Bson): Bson =
         let kind: BsonKind = s.readChar()
         var name: TaintedString = ""
         discard s.readLine(name)
@@ -664,11 +662,11 @@ proc initBsonDocument*(bytes: string): Bson =
             return doc(name.string, valueString)
         of BsonKindDocument:
             let ds: int32 = stream.peekInt32()
-            var subdoc = initBsonDocument(s.readStr(ds))
+            var subdoc = initBsonDocument(s)
             return doc(name.string, subdoc)
         of BsonKindArray:
             let ds: int32 = stream.peekInt32()
-            var subdoc = initBsonDocument(s.readStr(ds))
+            var subdoc = initBsonDocument(s)
             var subarr = initBsonArray()
             subarr.valueArray = @[]
             for k, v in subdoc.valueDocument: subarr.valueArray.add(v)
@@ -724,10 +722,17 @@ proc initBsonDocument*(bytes: string): Bson =
         else:
             raise newException(Exception, "Unexpected kind: " & $kind)
 
+    var document: Bson = initBsonDocument()
+
     while stream.peekChar() != 0.char:
         document = parseBson(stream, document)
+    discard stream.readChar()
 
     return document
+
+proc initBsonDocument*(bytes: string): Bson =
+    ## Create new Bson document from byte string
+    initBsonDocument(newStringStream(bytes))
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."

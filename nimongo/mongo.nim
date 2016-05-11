@@ -424,10 +424,7 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
 
       if numberReturned > 0:
         for i in 0..<numberReturned:
-          let docSize = stream.readInt32()
-          stream.setPosition(stream.getPosition() - 4)
-          let sdoc: string = stream.readStr(docSize)
-          yield initBsonDocument(sdoc)
+          yield initBsonDocument(stream)
       elif numberToReturn == 1:
         raise newException(NotFound, "No documents matching query were found")
       else:
@@ -463,10 +460,7 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
 
   if numberReturned > 0:
     for i in 0..<numberReturned:
-      let docSize = stream.readInt32()
-      stream.setPosition(stream.getPosition() - 4)
-      let sdoc: string = stream.readStr(docSize)
-      result.add(initBsonDocument(sdoc))
+      result.add(initBsonDocument(stream))
     return
   elif numberToReturn == 1:
     raise newException(NotFound, "No documents matching query were found")
