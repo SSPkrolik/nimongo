@@ -93,6 +93,7 @@ type
   AsyncLockedSocket = ref object
     inuse:         bool
     authenticated: bool
+    connected:     bool
     sock:          AsyncSocket
 
   AsyncMongo* = ref object of MongoBase ## Mongo async client object
@@ -123,7 +124,11 @@ type
     nskip:      int32
     nlimit:     int32
 
-  NotFound* = object of Exception   ## Raises when querying of one documents returns empty result
+  NimongoError* = object of Exception        ## Base exception for nimongo error (for simplifying error handling)
+  
+  NotFound* = object of NimongoError         ## Raises when querying of one documents returns empty result
+  
+  CommunicationError* = object of Exception  ## Raises on communication problems with MongoDB server
 
   StatusReply* = object  ## Database Reply
     ok*: bool
@@ -207,6 +212,7 @@ proc newAsyncLockedSocket(): AsyncLockedSocket =
   return AsyncLockedSocket(
     inuse:         false,
     authenticated: false,
+    connected:     false,
     sock:          newAsyncSocket()
   )
 
@@ -235,6 +241,12 @@ proc next(am: AsyncMongo): Future[AsyncLockedSocket] {.async.} =
     for _ in 0..<am.pool.len():
       am.current = (am.current + 1) mod am.pool.len()
       if not am.pool[am.current].inuse:
+        if not am.pool[am.current].connected:
+          try:
+            await am.pool[am.current].sock.connect(am.host, asyncdispatch.Port(am.port))
+            am.pool[am.current].connected = true
+          except OSError:
+            continue
         am.pool[am.current].inuse = true
         return am.pool[am.current]
     await sleepAsync(1)
@@ -293,14 +305,13 @@ proc setWriteConcert*(a: AsyncMongo, w: string, j: bool, wtimeout: int = 0) =
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
-  var connected: bool = false
   for ls in am.pool.items():
     try:
       await ls.sock.connect(am.host, asyncdispatch.Port(am.port))
-      connected = true
+      ls.connected = true
     except OSError:
       continue
-  return connected
+  return any(am.pool, proc(item: AsyncLockedSocket): bool = item.connected)
 
 proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     ## Retrieves database from Mongo
@@ -433,18 +444,33 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
         discard
 
 proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
+  ## Perform asynchronouse OP_QUERY operation to MongoDB.
+
+  # Template for disconnection handling
+  template handleDisconnect(response: var string, sock: AsyncLockedSocket) =
+    if response == "":
+      ls.connected = false
+      ls.inuse = false
+      raise newException(CommunicationError, "Disconnected from MongoDB server")
+
   ## Private procedure for performing actual query to Mongo via async client
   var ls: AsyncLockedSocket = await f.collection.client.next()
 
   await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
-  ## Read Length
-  var
-    data: string = await ls.sock.recv(4)
-    stream: Stream = newStringStream(data)
+  
+  # Read reply length
+  var data: string = await ls.sock.recv(4)
+  handleDisconnect(data, ls)
+
+  var stream: Stream = newStringStream(data)
   let messageLength: int32 = stream.readInt32()
 
   ## Read data
-  data = await ls.sock.recv(messageLength - 4)
+  data = ""
+  while data.len < messageLength - 4:
+    var chunk: string = await ls.sock.recv(messageLength - 4)
+    handleDisconnect(chunk, ls)
+    data = data & chunk 
 
   ls.inuse = false
 
