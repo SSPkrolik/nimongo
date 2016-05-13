@@ -293,12 +293,14 @@ proc setWriteConcert*(a: AsyncMongo, w: string, j: bool, wtimeout: int = 0) =
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
+  var connected: bool = false
   for ls in am.pool.items():
     try:
       await ls.sock.connect(am.host, asyncdispatch.Port(am.port))
+      connected = true
     except OSError:
       continue
-  return true
+  return connected
 
 proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     ## Retrieves database from Mongo
