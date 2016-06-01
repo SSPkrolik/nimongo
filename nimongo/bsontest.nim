@@ -57,4 +57,18 @@ suite "BSON serializer/deserializer test suite":
     check("field1" in doc)
     check(not ("field3" in doc))
 
+  test "Document inside array":
+    let doc = %*{
+      "field": "value",
+      "ar": [
+        {
+          "field1": 5'i32,
+          "field2": "gello"
+        },
+        {
+          "field": "hello"
+        }
+      ]
+    }
+
 echo ""

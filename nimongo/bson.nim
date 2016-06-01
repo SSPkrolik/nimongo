@@ -475,7 +475,7 @@ proc toBson(x: NimNode): NimNode {.compileTime.} =
   of nnkBracket:
     result = newNimNode(nnkBracket)
     for i in 0 .. <x.len():
-        result.add(newCall("toBson",x[i]))
+        result.add(toBson(x[i]))
     result = newCall("toBson", result)
 
   of nnkTableConstr:
