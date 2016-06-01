@@ -6,7 +6,7 @@ import asyncdispatch
 import asyncnet
 import base64
 import locks
-import math
+import random
 import md5
 import net
 import oids
@@ -470,7 +470,7 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
   while data.len < messageLength - 4:
     var chunk: string = await ls.sock.recv(messageLength - 4)
     handleDisconnect(chunk, ls)
-    data = data & chunk 
+    data = data & chunk
 
   ls.inuse = false
 
@@ -931,7 +931,8 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
     return false
 
   let uname = username.replace("=", "=3D").replace(",", "=2C")
-  let nonce = base64.encode(($random(1.0))[2..^1])
+  let rand = random.random(1.0)
+  let nonce = base64.encode(($rand)[2..^1])
   let fb = "n=" & uname & ",r=" & nonce
 
   let requestStart = %*{
@@ -1021,7 +1022,8 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     return false
 
   let uname = username.replace("=", "=3D").replace(",", "=2C")
-  let nonce = base64.encode(($random(1.0))[2..^1])
+  let rand = random.random(1.0)
+  let nonce = base64.encode(($rand)[2..^1])
   let fb = "n=" & uname & ",r=" & nonce
 
   let requestStart = %*{
