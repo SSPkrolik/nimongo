@@ -37,11 +37,11 @@ let writeConcernDefault*: Bson = %*{"w": 1, "j": false}
 proc writeConcern*(w: string, j: bool, wtimeout: int = 0): Bson =
   ## Custom write concern creation
   if w == "majority":
-    result = %*{"w": w, "j", j}
+    result = %*{"w": w, "j": j}
   else:
     result = %*{"w": parseInt(w).toInt32(), "j": j}
   if wtimeout > 0:
-    result = result("wtimeout", wtimeout)
+    result["wtimeout"] = wtimeout
   return result
 
 # ========================= #
@@ -399,7 +399,7 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
   var bfields: Bson = initBsonDocument()
   if f.fields.len() > 0:
       for field in f.fields.items():
-          bfields = bfields(field, 1'i32)
+          bfields[field] = 1'i32
   let squery = f.query.bytes()
   let sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
 
@@ -556,10 +556,10 @@ proc createCollection*(db: Database[Mongo], name: string, capped: bool = false, 
   ## Create collection inside database via sync connection
   var request = %*{"create": name}
 
-  if capped: request = request("capped", capped)
-  if autoIndexId: request = request("autoIndexId", true)
-  if maxSize > 0: request = request("size", maxSize)
-  if maxSize > 0: request = request("max", maxDocs)
+  if capped: request["capped"] = capped
+  if autoIndexId: request["autoIndexId"] = true
+  if maxSize > 0: request["size"] = maxSize
+  if maxSize > 0: request["max"] = maxDocs
 
   let response = db["$cmd"].find(request).one()
   return StatusReply(
@@ -570,10 +570,10 @@ proc createCollection*(db: Database[AsyncMongo], name: string, capped: bool = fa
   ## Create collection inside database via async connection
   var request = %*{"create": name}
 
-  if capped: request = request("capped", capped)
-  if autoIndexId: request = request("autoIndexId", true)
-  if maxSize > 0: request = request("size", maxSize)
-  if maxSize > 0: request = request("max", maxDocs)
+  if capped: request["capped"] = capped
+  if autoIndexId: request["autoIndexId"] = true
+  if maxSize > 0: request["size"] = maxSize
+  if maxSize > 0: request["max"] = maxDocs
 
   let response = await db["$cmd"].find(request).one()
   return StatusReply(

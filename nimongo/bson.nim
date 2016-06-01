@@ -430,44 +430,81 @@ proc initBsonArray*(): Bson =
 template B*: expr =
     initBsonDocument()
 
-proc toBson(x: NimNode, child: NimNode = nil): NimNode =
+proc `[]`*(bs: Bson, key: string): Bson =
+    ## Get Bson document field
+    if bs.kind == BsonKindDocument:
+        return bs.valueDocument.getOrDefault(key)
+    else:
+        raiseWrongNodeException(bs)
+
+proc `[]=`*(bs: Bson, key: string, value: Bson) =
+  ## Modify Bson document field
+  if bs.kind == BsonKindDocument:
+      bs.valueDocument[key] = value
+  else:
+      raiseWrongNodeException(bs)
+
+proc `[]`*(bs: Bson, key: int): Bson =
+    ## Get Bson array item by index
+    if bs.kind == BsonKindArray:
+        return bs.valueArray[key]
+    else:
+        raiseWrongNodeException(bs)
+
+proc `[]=`*(bs: Bson, key: int, value: Bson) =
+    ## Modify Bson array element
+    if bs.kind == BsonKindArray:
+        bs.valueArray[key] = value
+
+proc toBson*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =
+    ## Generic constructor for BSON data.
+    result = initBsonDocument()
+    for key, val in items(keyVals): result[key] = val
+
+proc toBson*[T](vals: openArray[T]): Bson =
+    result = initBsonArray()
+    for val in vals: result.add(toBson(val))
+
+template toBson*(b: Bson): Bson = b
+    ##
+
+proc toBson(x: NimNode): NimNode {.compileTime.} =
   ## Convert NimNode into BSON document
   case x.kind
-  of nnkCurly:
-    if x.len() == 0:
-      var call = newNimNode(nnkCall)
-      call.add(ident("initBsonDocument"))
-      return call
-  of nnkTableConstr:
-    var call = newNimNode(nnkCall)
-    call.add(ident("initBsonDocument"))
+
+  of nnkBracket:
+    result = newNimNode(nnkBracket)
     for i in 0 .. <x.len():
-      if x[i].kind == nnkExprColonExpr:
-        var parentCall = newNimNode(nnkCall)
-        parentCall.add(call)
-        call = toBson(x[i], parentCall)
-    return call
-  of nnkExprColonExpr:
-    child.add(x[0])
-    if x[1].kind == nnkBracket:
-      child.add(prefix(x[1], "@"))
-    elif x[1].kind == nnkTableConstr:
-      child.add(toBson(x[1]))
-    else:
-      child.add(x[1])
-    return child
+        result.add(newCall("toBson",x[i]))
+    result = newCall("toBson", result)
+
+  of nnkTableConstr:
+    result = newNimNode(nnkTableConstr)
+    for i in 0 .. <x.len():
+        x[i].expectKind(nnkExprColonExpr)
+        result.add(newNimNode(nnkExprColonExpr).add(x[i][0]).add(toBson(x[i][1])))
+    result = newCall("toBson", result)
+
+  of nnkCurly:
+    result = newCall("initBsonDocument")
+    x.expectLen(0)
+
   else:
-    return x
+    result = newCall("toBson", x)
 
 macro `%*`*(x: expr): Bson =
     ## Perform dict-like structure conversion into bson
     result = toBson(x)
 
 template B*(key: string, val: Bson): Bson =  ## Shortcut for _initBsonDocument
-    initBsonDocument()(key, val)
+    let b = initBsonDocument()
+    b[key] = val
+    b
 
 template B*[T](key: string, values: seq[T]): Bson =
-    initBsonDocument()(key, values)
+    let b = initBsonDocument()
+    b[key] = values
+    b
 
 proc dbref*(refcol: string, refoid: Oid): Bson =
     ## Create new DBRef (database reference) MongoDB bson type
@@ -530,7 +567,7 @@ proc timeUTC*(time: Time): Bson =
     valueTime: time
   )
 
-proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
+proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable, deprecated.} =
   ## Add field to bson object
   result = bs
   if bs.kind == BsonKindDocument:
@@ -541,7 +578,7 @@ proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable.} =
   else:
       raiseWrongNodeException(bs)
 
-proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable.} =
+proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprecated.} =
     ## Add array field to bson object
     result = bs
 
@@ -573,32 +610,6 @@ proc del*(bs: Bson, idx: int) =
         bs.valueArray.del(idx)
     else:
         raiseWrongNodeException(bs)
-
-proc `[]`*(bs: Bson, key: string): Bson =
-    ## Get Bson document field
-    if bs.kind == BsonKindDocument:
-        return bs.valueDocument.getOrDefault(key)
-    else:
-        raiseWrongNodeException(bs)
-
-proc `[]=`*(bs: Bson, key: string, value: Bson) =
-  ## Modify Bson document field
-  if bs.kind == BsonKindDocument:
-      bs.valueDocument[key] = value
-  else:
-      raiseWrongNodeException(bs)
-
-proc `[]`*(bs: Bson, key: int): Bson =
-    ## Get Bson array item by index
-    if bs.kind == BsonKindArray:
-        return bs.valueArray[key]
-    else:
-        raiseWrongNodeException(bs)
-
-proc `[]=`*(bs: Bson, key: int, value: Bson) =
-    ## Modify Bson array element
-    if bs.kind == BsonKindArray:
-        bs.valueArray[key] = value
 
 proc `{}`*(bs: Bson, keys: varargs[string]): Bson =
   var b = bs
@@ -655,70 +666,90 @@ proc initBsonDocument*(stream: Stream): Bson =
         discard s.readLine(name)
         case kind:
         of BsonKindDouble:
-            return doc(name.string, s.readFloat64())
+            doc[name.string] = s.readFloat64()
+            return doc
         of BsonKindStringUTF8:
             let valueString: string = s.readStr(s.readInt32() - 1)
             discard s.readChar()
-            return doc(name.string, valueString)
+            doc[name.string] = valueString
+            return doc
         of BsonKindDocument:
             let ds: int32 = stream.peekInt32()
             var subdoc = initBsonDocument(s)
-            return doc(name.string, subdoc)
+            doc[name] = subdoc
+            return doc
         of BsonKindArray:
             let ds: int32 = stream.peekInt32()
             var subdoc = initBsonDocument(s)
             var subarr = initBsonArray()
             subarr.valueArray = @[]
             for k, v in subdoc.valueDocument: subarr.valueArray.add(v)
-            return doc(name.string, subarr)
+            doc[name.string] = subarr
+            return doc
         of BsonKindBinary:
             let
                 ds: int32 = s.readInt32()
                 st: BsonSubtype = s.readChar().BsonSubtype
             case st:
             of BsonSubtypeMd5:
-                return doc(name.string, cast[MD5Digest](s.readStr(ds).cstring))
+                doc[name.string] = cast[MD5Digest](s.readStr(ds).cstring)
+                return doc
             of BsonSubtypeGeneric:
-                return doc(name.string, bin(s.readStr(ds)))
+                doc[name.string] = bin(s.readStr(ds))
+                return doc
             of BsonSubtype.BsonSubtypeUserDefined:
-                return doc(name.string, binuser(s.readStr(ds)))
+                doc[name.string] = binuser(s.readStr(ds))
+                return doc
             else:
                 raise newException(Exception, "Unexpected subtype: " & $st)
         of BsonKindUndefined:
-            return doc(name.string, undefined())
+            doc[name.string] = undefined()
+            return doc
         of BsonKindOid:
             let valueOid: Oid = cast[Oid](s.readStr(12).cstring)
-            return doc(name.string, valueOid)
+            doc[name.string] = valueOid
+            return doc
         of BsonKindBool:
-            return doc(name.string, if s.readChar() == 0.char: false else: true)
+            doc[name.string] = if s.readChar() == 0.char: false else: true
+            return doc
         of BsonKindTimeUTC:
             let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
-            return doc(name.string, timeUTC)
+            doc[name.string] = timeUTC
+            return doc
         of BsonKindNull:
-            return doc(name.string, null())
+            doc[name.string] = null()
+            return doc
         of BsonKindRegexp:
-            return doc(name.string, regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp))))
+            doc[name.string] = regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
+            return doc
         of BsonKindDBPointer:
             let
               refcol: string = s.readStr(s.readInt32() - 1)
               refoid: Oid = cast[Oid](s.readStr(12).cstring)
             discard s.readChar()
-            return doc(name.string, dbref(refcol, refoid))
+            doc[name.string] = dbref(refcol, refoid)
+            return doc
         of BsonKindJSCode:
             let
               code: string = s.readStr(s.readInt32() - 1)
             discard s.readChar()
-            return doc(name.string, js(code))
+            doc[name.string] = js(code)
+            return doc
         of BsonKindInt32:
-            return doc(name.string, s.readInt32())
+            doc[name.string] = s.readInt32()
+            return doc
         of BsonKindTimestamp:
-            return doc(name.string, cast[BsonTimestamp](s.readInt64()))
+            doc[name.string] = cast[BsonTimestamp](s.readInt64())
+            return doc
         of BsonKindInt64:
-            return doc(name.string, s.readInt64())
+            doc[name.string] = s.readInt64()
+            return doc
         of BsonKindMinimumKey:
-            return doc(name.string, minkey())
+            doc[name.string] = minkey() 
+            return doc
         of BsonKindMaximumKey:
-            return doc(name.string, maxkey())
+            doc[name.string] = maxkey()
+            return doc
         else:
             raise newException(Exception, "Unexpected kind: " & $kind)
 
@@ -737,30 +768,33 @@ proc initBsonDocument*(bytes: string): Bson =
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
     let oid = genOid()
-    var bdoc: Bson = initBsonDocument()(
-        "image", bin("12312l3jkalksjslkvdsdas"))(
-        "balance", 1000.23)(
-        "name", "John")(
-        "someId", oid)(
-        "someTrue", true)(
-        "surname", "Smith")(
-        "someNull", null())(
-        "minkey", minkey())(
-        "maxkey", maxkey())(
-        "digest", "".toMd5())(
-        "regexp-field", regex("pattern", "ismx"))(
-        "undefined", undefined())(
-        "someJS", js("function identity(x) {return x;}"))(
-        "someRef", dbref("db.col", genOid()))(
-        "userDefined", binuser("some-binary-data"))(
-        "someTimestamp", BsonTimestamp(increment: 1, timestamp: 1))(
-        "utcTime", timeUTC(getTime()))(
-        "subdoc", initBsonDocument()(
-            "salary", 500
-        )(
-        "array", @[%*{"string": "hello"},%*{"string" : "world"}]
-        )
-    )
+    let bdoc: Bson = %*{
+        "image": bin("12312l3jkalksjslkvdsdas"),
+        "balance":       1000.23,
+        "name":          "John",
+        "someId":        oid,
+        "someTrue":      true,
+        "surname":       "Smith",
+        "someNull":      null(),
+        "minkey":        minkey(),
+        "maxkey":        maxkey(),
+        "digest":        "".toMd5(),
+        "regexp-field":  regex("pattern", "ismx"),
+        "undefined":     undefined(),
+        "someJS":        js("function identity(x) {return x;}"),
+        "someRef":       dbref("db.col", genOid()),
+        "userDefined":   binuser("some-binary-data"),
+        "someTimestamp": BsonTimestamp(increment: 1, timestamp: 1),
+        "utcTime":       timeUTC(getTime()),
+        "subdoc": %*{
+            "salary": 500
+        },
+        "array": [
+            %*{"string": "hello"},
+            %*{"string" : "world"}
+        ]
+    }
+    
     echo bdoc
     let bbytes = bdoc.bytes()
     let recovered = initBsonDocument(bbytes)
