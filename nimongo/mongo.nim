@@ -19,7 +19,7 @@ import times
 import uri
 import os
 
-import bson
+import bson except `()`
 import timeit
 
 import pbkdf2
