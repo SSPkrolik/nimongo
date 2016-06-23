@@ -191,6 +191,9 @@ suite "Mongo client operations test suite":
     check(sco.insert(%*{"double": 3.1415}))
     check(waitFor(aco.insert(%*{"double": 3.1415})))
 
+    check(sco.find(%*{"double": 3.1415}).all().len() == 1)
+    check(waitFor(aco.find(%*{"double": 3.1415}).all()).len() == 1)
+
   test "[ASYNC] [SYNC] Inserting multiple documents":
     let
       doc1 = %*{"integer": 100'i32}
@@ -276,6 +279,20 @@ suite "Mongo aggregation commands":
 
     check(waitFor(aco.insert(@[%*{"string": "value", "int": 1'i64}, %*{"string": "value", "double": 2.0}])))
     check(waitFor(aco.find(%*{"string": "value"}).unique("string")) == @["value"])
+
+  test "[ASYNC] [SYNC] Sort query results":
+    sco.insert(@[%*{"i": 5}, %*{"i": 3}, %*{"i": 4}, %*{"i": 2}])
+    let res = sco.find(%*{}).orderBy(%*{"i": 1}).all()
+    check:
+      res[0]["i"] == 2
+      res[^1]["i"] == 5
+
+    discard waitFor(aco.insert(@[%*{"i": 5}, %*{"i": 3}, %*{"i": 4}, %*{"i": 2}]))
+    let ares = waitFor(aco.find(%*{}).orderBy(%*{"i": 1}).all())
+    check:
+      ares[0]["i"] == 2
+      ares[^1]["i"] == 5
+
 
 suite "Mongo client querying test suite":
 
