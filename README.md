@@ -270,12 +270,13 @@ This table represents MongoDB features and their implementation status within
 |            | Drop Index      | :red_circle:       | :red_circle:       | |
 |            | Drop Indices    | :red_circle:       | :red_circle:       | |
 |            | Ensure Index    | :red_circle:       | :red_circle:       | |
-|Aggregation |                 | __2__ / __5__      | __2__ / __5__      | |
+|Aggregation |                 | __3__ / __6__      | __3__ / __6__      | |
 |            | aggregate       | :red_circle:       | :red_circle:       | |
 |            | count           | :white_check_mark: | :white_check_mark: | |
 |            | distinct        | :white_check_mark: | :white_check_mark: | __Cursor.unique__ proc |
 |            | group           | :red_circle:       | :red_circle:       | |
 |            | mapReduce       | :red_circle:       | :red_circle:       | |
+|            | orderBy         | :white_check_mark: | :white_check_mark: | |
 |Geospatial  |                 | __0__ /__3__       | __0__ / __3__      | |
 |            | geoNear         | :red_circle:       | :red_circle:       | |
 |            | geoSearch       | :red_circle:       | :red_circle:       | |
