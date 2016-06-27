@@ -220,7 +220,7 @@ This table represents MongoDB features and their implementation status within
 |            | Socket Timeout  | :red_circle:       | :red_circle:       |       |
 |            | SSL             | :red_circle:       | :red_circle:       |       |
 |            | Connect Timeout | :red_circle:       | :red_circle:       | |
-|            | Write Concern   | :white_check_mark: | :white_check_mark: | __setWriteConcern(...)__ |
+|            | Write Concern   | :white_check_mark: | :white_check_mark: | |
 |            | Read Preference | :red_circle:       | :red_circle:       | |
 |Operations  | Insert (Single/Multiple), Remove (Single/Multiple), Update (Single/Multiple/Upsert) | :white_check_mark: | :white_check_mark: | |
 |Querying    |                 | __6__ / __10__     | __5__ / __9__      | |
