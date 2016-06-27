@@ -25,24 +25,11 @@ import timeit
 import pbkdf2
 import sha1, hmac
 
+import writeconcern
+
 randomize()
 
-# ===================== #
-# Write Concern support #
-# ===================== #
-
-let writeConcernDefault*: Bson = %*{"w": 1, "j": false}
-  ## Default MongoDB write concern
-
-proc writeConcern*(w: string, j: bool, wtimeout: int = 0): Bson =
-  ## Custom write concern creation
-  if w == "majority":
-    result = %*{"w": w, "j": j}
-  else:
-    result = %*{"w": parseInt(w).toInt32(), "j": j}
-  if wtimeout > 0:
-    result["wtimeout"] = wtimeout
-  return result
+export writeconcern
 
 # ========================= #
 # Foundation types support  #
@@ -83,7 +70,7 @@ type
     username:     string
     password:     string
     replicas:     seq[tuple[host: string, port: uint16]]
-    writeConcern: Bson
+    writeConcern: WriteConcern
 
   Mongo* = ref object of MongoBase      ## Mongo client object
     requestLock:   Lock
@@ -186,7 +173,7 @@ proc init(b: MongoBase, host: string, port: uint16) =
     b.replicas = @[]
     b.username = ""
     b.password = ""
-    b.writeConcern = writeConcernDefault
+    b.writeConcern = writeConcernDefault()
 
 proc init(b: MongoBase, u: Uri) =
     let port = if u.port.len > 0: parseInt(u.port).uint16 else: DefaultMongoPort
@@ -296,13 +283,14 @@ proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
     result = m
     m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
 
-proc setWriteConcern*(m: Mongo, w: string, j: bool, wtimeout: int = 0) =
-  ## Set client-wide write concern for sync client
-  m.writeConcern = writeConcern(w, j, wtimeout)
+proc writeConcern*[T:Mongo|AsyncMongo](m: T): WriteConcern =
+    ## Getter for currently setup client's write concern
+    return m.writeConcern
 
-proc setWriteConcert*(a: AsyncMongo, w: string, j: bool, wtimeout: int = 0) =
-  ## Set client-wide write concern for async client
-  a.writeConcern = writeConcern(w, j, wtimeout)
+proc `writeConcern=`*[T:Mongo|AsyncMongo](m: T, concern: WriteConcern) =
+  ## Set client-wide write concern for sync client
+  assert "w" in concern
+  m.writeConcern = concern
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
@@ -878,10 +866,7 @@ proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData:
     "pwd": pwd,
     "customData": customData,
     "roles": roles,
-    "writeConcern": %*{
-      "w": 1'i32,
-      "j": 0'i32
-    }
+    "writeConcern": db.client.writeConcern
   }
   let response = db["$cmd"].makeQuery(createUserRequest).one()
   return StatusReply(
@@ -897,10 +882,7 @@ proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, custom
       "pwd": pwd,
       "customData": customData,
       "roles": roles,
-      "writeConcern": %*{
-        "w": 1'i32,
-        "j": 0'i32
-      }
+      "writeConcern": db.client.writeConcern
     }
     response = await db["$cmd"].makeQuery(createUserRequest).one()
   return StatusReply(
@@ -913,10 +895,7 @@ proc dropUser*(db: Database[Mongo], username: string): bool =
   let
     dropUserRequest = %*{
       "dropUser": username,
-      "writeConcern": %*{
-        "w": 1'i32,
-        "j": 0'i32
-        }
+      "writeConcern": db.client.writeConcern
       }
     response = db["$cmd"].makeQuery(dropUserRequest).one()
   return StatusReply(
@@ -929,11 +908,8 @@ proc dropUser*(db: Database[AsyncMongo], username: string): Future[bool] {.async
   let
     dropUserRequest = %*{
       "dropUser": username,
-      "writeConcern": %*{
-        "w": 1'i32,
-        "j": 0'i32
-        }
-      }
+      "writeConcern": db.client.writeConcern
+    }
     response = await db["$cmd"].makeQuery(dropUserRequest).one()
   return StatusReply(
     ok: response["ok"] == 1.0'f64,

@@ -34,6 +34,11 @@ suite "Mongo instance administration commands test suite":
   setup:
     discard
 
+  test "[ASYNC] [SYNC] Init":
+    check:
+        sm.writeConcern["w"].toInt32() == writeConcernDefault()["w"].toInt32()
+        am.writeConcern["j"].toBool() == writeConcernDefault()["j"].toBool()
+
   test "[ASYNC] [SYNC] Command: 'isMaster'":
     var m: bool
     m = sm.isMaster()
