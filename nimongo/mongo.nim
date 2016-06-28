@@ -25,53 +25,22 @@ import timeit
 import pbkdf2
 import sha1, hmac
 
+import auth
+import clientbase
+import errors
+import proto
+import reply
 import writeconcern
 
 randomize()
 
+export auth
+export clientbase except nextRequestId, init
+export errors
+export reply
 export writeconcern
 
-# ========================= #
-# Foundation types support  #
-# ========================= #
-
-type AuthenticationMethod* = enum ## What type of authentication we use
-  NoAuth
-  ScramSHA1                       ## +
-  MongodbCr
-  MongodbX509
-  Kerberos                        ## Enterprise-only
-  Ldap                            ## Enterprise-only
-
-type ClientKind* = enum           ## Kind of client communication type
-  ClientKindBase  = 0
-  ClientKindSync  = 1
-  ClientKindAsync = 2
-
-const
-  OP_QUERY = 2004'i32           ## OP_QUERY operation code (wire protocol)
-
-  TailableCursor  = 1'i32 shl 1 ## Leave cursor alive on MongoDB side
-  SlaveOk         = 1'i32 shl 2 ## Allow to query replica set slaves
-  NoCursorTimeout = 1'i32 shl 4 ##
-  AwaitData       = 1'i32 shl 5 ##
-  Exhaust         = 1'i32 shl 6 ##
-  Partial         = 1'i32 shl 7 ## Get info only from running shards
-
-  DefaultMongoHost* = "127.0.0.1"
-  DefaultMongoPort* = 27017'u16  ## Default MongoDB IP Port
-
 type
-  MongoBase* = ref object of RootObj ## Base for Mongo clients
-    requestId:    int32
-    host:         string
-    port:         uint16
-    queryFlags:   int32
-    username:     string
-    password:     string
-    replicas:     seq[tuple[host: string, port: uint16]]
-    writeConcern: WriteConcern
-
   Mongo* = ref object of MongoBase      ## Mongo client object
     requestLock:   Lock
     sock:          Socket
@@ -112,74 +81,7 @@ type
     nlimit:     int32
     sorting:    Bson
 
-  NimongoError* = object of Exception        ## Base exception for nimongo error (for simplifying error handling)
-  
-  NotFound* = object of NimongoError         ## Raises when querying of one documents returns empty result
-  
-  CommunicationError* = object of Exception  ## Raises on communication problems with MongoDB server
-
-  StatusReply* = object  ## Database Reply
-    ok*: bool
-    n*: int
-    err*: string
-
-converter toBool*(sr: StatusReply): bool = sr.ok
-  ## If StatusReply.ok field is true = then StatusReply is considered
-  ## to be successful. It is a convinience wrapper for the situation
-  ## when we are not interested in no more status information than
-  ## just a flag of success.
-
-# === Private APIs === #
-
-proc nextRequestId(mb: MongoBase): int32 =
-    ## Return next request id for current MongoDB client
-    mb.requestId = (mb.requestId + 1) mod (int32.high - 1'i32)
-    return mb.requestId
-
-proc newCursor[T](c: Collection[T]): Cursor[T] =
-    ## Private constructor for the Find object. Find acts by taking
-    ## client settings (flags) that can be overriden when actual
-    ## query is performed.
-    result.new
-    result.collection = c
-    result.fields = @[]
-    result.queryFlags = c.client.queryFlags
-    result.nskip = 0
-    result.nlimit = 0
-
-proc buildMessageHeader(messageLength, requestId, responseTo: int32, res: var string) =
-    ## Build Mongo message header as a series of bytes
-    int32ToBytes(messageLength, res)
-    int32ToBytes(requestId, res)
-    int32ToBytes(responseTo, res)
-    int32ToBytes(OP_QUERY, res)
-
-proc buildMessageQuery(flags: int32, fullCollectionName: string,
-        numberToSkip, numberToReturn: int32, res: var string) =
-    ## Build Mongo query message
-    int32ToBytes(flags, res)
-    res &= fullCollectionName
-    res &= char(0)
-    int32ToBytes(numberToSkip, res)
-    int32ToBytes(numberToReturn, res)
-
 # === Mongo client API === #
-
-proc init(b: MongoBase, host: string, port: uint16) =
-    b.host = host
-    b.port = port
-    b.requestID = 0
-    b.queryFlags = 0
-    b.replicas = @[]
-    b.username = ""
-    b.password = ""
-    b.writeConcern = writeConcernDefault()
-
-proc init(b: MongoBase, u: Uri) =
-    let port = if u.port.len > 0: parseInt(u.port).uint16 else: DefaultMongoPort
-    b.init(u.hostname, port)
-    b.username = u.username
-    b.password = u.password
 
 proc newMongo*(host: string = "127.0.0.1", port: uint16 = DefaultMongoPort, secure=false): Mongo =
     ## Mongo client constructor
@@ -246,51 +148,8 @@ proc replica*[T:Mongo|AsyncMongo](mb: T, nodes: seq[tuple[host: string, port: ui
     when T is AsyncMongo:
       mb.replicas.add((host: node.host, port: asyncnet.Port(node.port)))
 
-method kind*(mb: MongoBase): ClientKind {.base.} = ClientKindBase   ## Base Mongo client
 method kind*(sm: Mongo): ClientKind = ClientKindSync       ## Sync Mongo client
 method kind*(am: AsyncMongo): ClientKind = ClientKindAsync ## Async Mongo client
-
-proc tailableCursor*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
-    ## Enable/disable tailable behaviour for the cursor (cursor is not
-    ## removed immediately after the query)
-    result = m
-    m.queryFlags = if enable: m.queryFlags or TailableCursor else: m.queryFlags and (not TailableCursor)
-
-proc slaveOk*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
-    ## Enable/disable querying from slaves in replica sets
-    result = m
-    m.queryFlags = if enable: m.queryFlags or SlaveOk else: m.queryFlags and (not SlaveOk)
-
-proc noCursorTimeout*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
-    ## Enable/disable cursor idle timeout
-    result = m
-    m.queryFlags = if enable: m.queryFlags or NoCursorTimeout else: m.queryFlags and (not NoCursorTimeout)
-
-proc awaitData*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
-    ## Enable/disable data waiting behaviour (along with tailable cursor)
-    result = m
-    m.queryFlags = if enable: m.queryFlags or AwaitData else: m.queryFlags and (not AwaitData)
-
-proc exhaust*(m: Mongo, enable: bool = true): Mongo {.discardable.} =
-    ## Enable/disabel exhaust flag which forces database to giveaway
-    ## all data for the query in form of "get more" packages.
-    result = m
-    m.queryFlags = if enable: m.queryFlags or Exhaust else: m.queryFlags and (not Exhaust)
-
-proc allowPartial*(m: Mongo, enable: bool = true): Mongo {.discardable} =
-    ## Enable/disable allowance for partial data retrieval from mongos when
-    ## one or more shards are down.
-    result = m
-    m.queryFlags = if enable: m.queryFlags or Partial else: m.queryFlags and (not Partial)
-
-proc writeConcern*[T:Mongo|AsyncMongo](m: T): WriteConcern =
-    ## Getter for currently setup client's write concern
-    return m.writeConcern
-
-proc `writeConcern=`*[T:Mongo|AsyncMongo](m: T, concern: WriteConcern) =
-  ## Set client-wide write concern for sync client
-  assert "w" in concern
-  m.writeConcern = concern
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
@@ -307,10 +166,6 @@ proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     result.new()
     result.name = dbName
     result.client = client
-
-proc `$`*[T:Mongo|AsyncMongo](m: T): string =
-    ## Return full DSN for the Mongo connection
-    return "mongodb://$#:$#" % [m.host, $m.port]
 
 # === Database API === #
 
@@ -330,6 +185,17 @@ proc `[]`*[T:Mongo|AsyncMongo](db: Database[T], collectionName: string): Collect
 proc `$`*(c: Collection): string =
     ## String representation of collection name
     return c.db.name & "." & c.name
+
+proc newCursor[T](c: Collection[T]): Cursor[T] =
+    ## Private constructor for the Find object. Find acts by taking
+    ## client settings (flags) that can be overriden when actual
+    ## query is performed.
+    result.new
+    result.collection = c
+    result.fields = @[]
+    result.queryFlags = c.client.queryFlags
+    result.nskip = 0
+    result.nlimit = 0
 
 proc makeQuery[T:Mongo|AsyncMongo](c: Collection[T], query: Bson, fields: seq[string] = @[]): Cursor[T] =
   ## Create lazy query object to MongoDB that can be actually run
