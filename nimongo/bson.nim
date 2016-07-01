@@ -65,6 +65,7 @@ type
     timestamp*: int32
 
   Bson* = ref object of RootObj  ## Bson Node
+    key: string
     case kind*: BsonKind
     of BsonKindDouble:           valueFloat64:     float64
     of BsonKindStringUTF8:       valueString:      string
@@ -588,6 +589,13 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprec
 
     result.valueDocument[key] = arr
 
+proc len*(bs: Bson):int =
+    if bs.kind == BsonKindArray:
+        result = bs.valueArray.len
+    else:
+        raiseWrongNodeException(bs)
+
+
 proc add*[T](bs: Bson, value: T): Bson {.discardable.} =
     result = bs
     result.valueArray.add(value)
@@ -642,6 +650,29 @@ iterator pairs*(bs: Bson): tuple[key: string, val: Bson] =
     if bs.kind == BsonKindDocument:
         for k, v in bs.valueDocument:
             yield (k, v)
+
+proc diff*(d1: Bson, d2: Bson): tuple[count: int, changed: Bson] =
+  ## Compares two bson documents or arrays and returns the changes  in doc1
+  result = (0,initBsonDocument())
+  var bskeys: seq[string]
+  bskeys = @[]
+
+  if d1.kind == BsonKindDocument:
+    for item in d1:
+        if item in d2:
+          echo item & " deleted"
+          inc result.count
+        discard """ else:
+           if not( item == d2[item]):
+            echo item & " changed"
+            inc result.count """
+        bskeys.add(item.key)
+
+    for item in d2:
+        if not(item in bskeys) and item in d1:
+          echo item.key  & " added"
+          inc result.count
+  return result
 
 proc contains*(bs: Bson, key: string): bool =
   ## Checks if Bson document has a specified field

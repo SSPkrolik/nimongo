@@ -57,6 +57,7 @@ suite "BSON serializer/deserializer test suite":
     check("field1" in doc)
     check(not ("field3" in doc))
 
+<<<<<<< 43d1401a1b9beabbb9a535072abb6a988d383a3c
   test "Document inside array":
     let doc = %*{
       "field": "value",
@@ -69,6 +70,20 @@ suite "BSON serializer/deserializer test suite":
           "field": "hello"
         }
       ]
+    }
+
+=======
+  test "Check if we can diff two Documents":
+    let doc1 = %*{
+      "double": 5436.5436,
+      "stringkey": "stringvalue",
+      "document": {
+        "double": 5436.5436,
+        "key": "value"
+      },
+      "array": [1, 2, 3],
+      "int32": 5436'i32,
+      "int64": 5436,
     }
 
 
@@ -85,4 +100,5 @@ suite "BSON serializer/deserializer test suite":
       }
     check(diff(doc1,doc2).count == 3)
 
+>>>>>>> added len and diff to bson node
 echo ""
