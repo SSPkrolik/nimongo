@@ -1,7 +1,6 @@
 import algorithm
 import base64
 import macros
-import marshal
 import md5
 import oids
 import sequtils
