@@ -824,21 +824,3 @@ when isMainModule:
     bdoc2 = bdoc2.add(2)
     bdoc2 = bdoc2.add(2)
     echo bdoc2
-
-    var bdoc3 = newBsonDocument()
-    bdoc3["a"] = newBsonDocument()
-    bdoc3["a"]["b"] = "ab"
-    bdoc3["c"] = 4
-
-    var bdoc4 = newBsonDocument()
-    bdoc4["b"] = newBsonDocument()
-    bdoc4["a"] = newBsonDocument()
-    bdoc4["a"]["c"] = "ac"
-    bdoc4["b"]["d"] = "bd"
-
-    var bdoc5 = bdoc3.merge(bdoc4)
-    echo "a: ", bdoc3
-    echo "b: ", bdoc4
-    echo "merged: ", bdoc5
-    bdoc4.update(bdoc3)
-    echo "updated: ", bdoc4
