@@ -744,7 +744,7 @@ proc initBsonDocument*(stream: Stream): Bson =
             doc[name.string] = s.readInt64()
             return doc
         of BsonKindMinimumKey:
-            doc[name.string] = minkey() 
+            doc[name.string] = minkey()
             return doc
         of BsonKindMaximumKey:
             doc[name.string] = maxkey()
@@ -763,6 +763,27 @@ proc initBsonDocument*(stream: Stream): Bson =
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte string
     initBsonDocument(newStringStream(bytes))
+
+proc merge*(a, b: Bson): Bson =
+    result = newBsonDocument()
+    for k, v in a:
+        if not b[k].isNil:
+            result[k] = v.merge(b[k])
+        else:
+            result[k] = v
+
+    for k, v in b:
+        if a[k].isNil:
+            result[k] = v
+
+proc update*(a, b: Bson)=
+    for k, v in a:
+        if not b[k].isNil:
+            a[k] = v.merge(b[k])
+
+    for k, v in b:
+        if a[k].isNil:
+            a[k] = v
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
@@ -793,7 +814,7 @@ when isMainModule:
             %*{"string" : "world"}
         ]
     }
-    
+
     echo bdoc
     let bbytes = bdoc.bytes()
     let recovered = initBsonDocument(bbytes)
@@ -803,3 +824,21 @@ when isMainModule:
     bdoc2 = bdoc2.add(2)
     bdoc2 = bdoc2.add(2)
     echo bdoc2
+
+    var bdoc3 = newBsonDocument()
+    bdoc3["a"] = newBsonDocument()
+    bdoc3["a"]["b"] = "ab"
+    bdoc3["c"] = 4
+
+    var bdoc4 = newBsonDocument()
+    bdoc4["b"] = newBsonDocument()
+    bdoc4["a"] = newBsonDocument()
+    bdoc4["a"]["c"] = "ac"
+    bdoc4["b"]["d"] = "bd"
+
+    var bdoc5 = bdoc3.merge(bdoc4)
+    echo "a: ", bdoc3
+    echo "b: ", bdoc4
+    echo "merged: ", bdoc5
+    bdoc4.update(bdoc3)
+    echo "updated: ", bdoc4
