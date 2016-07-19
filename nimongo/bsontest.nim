@@ -71,4 +71,41 @@ suite "BSON serializer/deserializer test suite":
       ]
     }
 
+  test "Document's merge":
+    let a = %*{
+      "field1": "value1",
+      "field2": [
+        {"ar0": "1"},
+        {"ar1": "2"},
+        {"ar2": "3"}
+      ]
+    }
+    let b = %*{
+      "field3": "value2",
+      "field0": 5'i32
+    }
+
+    let abm = merge(a, b)
+    check(abm["field0"] == 5'i32)
+    check(abm["field2"][0]["ar0"] == "1")
+
+  test "Document update":
+    let a = %*{
+      "field1": "value1",
+      "field2": [
+        {"ar0": "1"},
+        {"ar1": "2"},
+        {"ar2": "3"}
+      ]
+    }
+
+    let b = %*{
+      "field3": "value2",
+      "field0": 5'i32
+    }
+
+    b.update(a)
+    check(b["field0"] == 5'i32)
+    check(b["field2"][0]["ar0"] == "1")
+
 echo ""

@@ -407,7 +407,7 @@ proc `$`*(bs: Bson): string =
             raiseWrongNodeException(bs)
     return stringify(bs, "")
 
-proc initBsonDocument*(): Bson =
+proc initBsonDocument*(): Bson {.deprecated.}=
     ## Create new top-level Bson document
     result.new
     result.kind = BsonKindDocument
@@ -765,25 +765,36 @@ proc initBsonDocument*(bytes: string): Bson =
     initBsonDocument(newStringStream(bytes))
 
 proc merge*(a, b: Bson): Bson =
-    result = newBsonDocument()
-    for k, v in a:
-        if not b[k].isNil:
-            result[k] = v.merge(b[k])
-        else:
-            result[k] = v
 
-    for k, v in b:
-        if a[k].isNil:
-            result[k] = v
+    proc m_rec(a,b,r: Bson)=
+        for k, v in a:
+            if not b[k].isNil:
+                r[k] = v.merge(b[k])
+            else:
+                r[k] = v
+
+        for k, v in b:
+            if a[k].isNil:
+                r[k] = v
+
+    if (a.kind == BsonKindDocument or a.kind == BsonKindArray) and
+        (b.kind == BsonKindDocument or b.kind == BsonKindArray):
+        result = newBsonDocument()
+        m_rec(a,b,result)
+    else:
+        result = a
 
 proc update*(a, b: Bson)=
-    for k, v in a:
-        if not b[k].isNil:
-            a[k] = v.merge(b[k])
+    if (a.kind == BsonKindDocument or a.kind == BsonKindArray) and
+        (b.kind == BsonKindDocument or b.kind == BsonKindArray):
 
-    for k, v in b:
-        if a[k].isNil:
-            a[k] = v
+        for k, v in a:
+            if not b[k].isNil:
+                a[k] = v.merge(b[k])
+
+        for k, v in b:
+            if a[k].isNil:
+                a[k] = v
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
