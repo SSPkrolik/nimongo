@@ -407,7 +407,7 @@ proc `$`*(bs: Bson): string =
             raiseWrongNodeException(bs)
     return stringify(bs, "")
 
-proc initBsonDocument*(): Bson =
+proc initBsonDocument*(): Bson {.deprecated.}=
     ## Create new top-level Bson document
     result.new
     result.kind = BsonKindDocument
@@ -744,7 +744,7 @@ proc initBsonDocument*(stream: Stream): Bson =
             doc[name.string] = s.readInt64()
             return doc
         of BsonKindMinimumKey:
-            doc[name.string] = minkey() 
+            doc[name.string] = minkey()
             return doc
         of BsonKindMaximumKey:
             doc[name.string] = maxkey()
@@ -763,6 +763,38 @@ proc initBsonDocument*(stream: Stream): Bson =
 proc initBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte string
     initBsonDocument(newStringStream(bytes))
+
+proc merge*(a, b: Bson): Bson =
+
+    proc m_rec(a,b,r: Bson)=
+        for k, v in a:
+            if not b[k].isNil:
+                r[k] = v.merge(b[k])
+            else:
+                r[k] = v
+
+        for k, v in b:
+            if a[k].isNil:
+                r[k] = v
+
+    if (a.kind == BsonKindDocument or a.kind == BsonKindArray) and
+        (b.kind == BsonKindDocument or b.kind == BsonKindArray):
+        result = newBsonDocument()
+        m_rec(a,b,result)
+    else:
+        result = a
+
+proc update*(a, b: Bson)=
+    if (a.kind == BsonKindDocument or a.kind == BsonKindArray) and
+        (b.kind == BsonKindDocument or b.kind == BsonKindArray):
+
+        for k, v in a:
+            if not b[k].isNil:
+                a[k] = v.merge(b[k])
+
+        for k, v in b:
+            if a[k].isNil:
+                a[k] = v
 
 when isMainModule:
     echo "Testing nimongo/bson.nim module..."
@@ -793,7 +825,7 @@ when isMainModule:
             %*{"string" : "world"}
         ]
     }
-    
+
     echo bdoc
     let bbytes = bdoc.bytes()
     let recovered = initBsonDocument(bbytes)
