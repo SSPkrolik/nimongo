@@ -70,6 +70,7 @@ suite "BSON serializer/deserializer test suite":
         }
       ]
     }
+    check(doc["ar"][0]["field1"].toInt() == 5)
 
   test "Document's merge":
     let a = %*{

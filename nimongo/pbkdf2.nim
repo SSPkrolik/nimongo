@@ -11,7 +11,7 @@ proc hmac_sha1_prf(keyPtr: pointer, keyLen: uint32,
          textPtr: pointer, textLen: uint32,
          randomPtr: pointer) {.cdecl.} =
     let r = hmac_sha1(stringWithData(keyPtr, keyLen), stringWithData(textPtr, textLen))
-    for i, b in Sha1Digest(r):
+    for i, b in r:
        cast[ptr uint8](cast[int](randomPtr) + i)[] = b
 
 
@@ -123,7 +123,7 @@ proc pbkdf2 (prf: PRF, hLen: uint32, password, salt: string,
     var blockNumber = 1
     # First cacluate all the complete hLen sized blocks required.
     while blockNumber <= completeBlocks:
-        F (prf, hLen, password.cstring, password.len.uint32, salt.cstring, salt.len.uint32,
+        F(prf, hLen, password.cstring, password.len.uint32, salt.cstring, salt.len.uint32,
             iterationCount, blockNumber.uint32, dataPtr, cast[pointer](cast[uint](blkBuffer) + hLen))
         dataPtr = cast[pointer](cast[uint](dataPtr) + hLen)
         inc blockNumber
@@ -131,7 +131,7 @@ proc pbkdf2 (prf: PRF, hLen: uint32, password, salt: string,
     # Finally if the requested output size was not an even multiple of hLen, calculate
     #   the final block and copy the first partialBlockSize bytes of it to the output.
     if partialBlockSize > 0'u:
-        F (prf, hLen, password.cstring, password.len.uint32, salt.cstring, salt.len.uint32,
+        F(prf, hLen, password.cstring, password.len.uint32, salt.cstring, salt.len.uint32,
             iterationCount, blockNumber.uint32, blkBuffer, cast[pointer](cast[uint](blkBuffer) + hLen))
         copyMem(dataPtr, blkBuffer, partialBlockSize);
 

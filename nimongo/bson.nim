@@ -419,15 +419,19 @@ proc newBsonDocument*(): Bson =
     result.kind = BsonKindDocument
     result.valueDocument = initOrderedTable[string, Bson]()
 
-proc initBsonArray*(): Bson =
+proc newBsonArray*(): Bson =
     ## Create new Bson array
     result = Bson(
         kind: BsonKindArray,
         valueArray: newSeq[Bson]()
     )
 
+proc initBsonArray*(): Bson {.deprecated.} =
+    ## Create new Bson array
+    return newBsonArray()
+
 template B*: expr =
-    initBsonDocument()
+    newBsonDocument()
 
 proc `[]`*(bs: Bson, key: string): Bson =
     ## Get Bson document field
@@ -457,11 +461,11 @@ proc `[]=`*(bs: Bson, key: int, value: Bson) =
 
 proc toBson*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =
     ## Generic constructor for BSON data.
-    result = initBsonDocument()
+    result = newBsonDocument()
     for key, val in items(keyVals): result[key] = val
 
 proc toBson*[T](vals: openArray[T]): Bson =
-    result = initBsonArray()
+    result = newBsonArray()
     for val in vals: result.add(toBson(val))
 
 template toBson*(b: Bson): Bson = b
@@ -485,7 +489,7 @@ proc toBson(x: NimNode): NimNode {.compileTime.} =
     result = newCall("toBson", result)
 
   of nnkCurly:
-    result = newCall("initBsonDocument")
+    result = newCall("newBsonDocument")
     x.expectLen(0)
 
   else:
@@ -495,13 +499,13 @@ macro `%*`*(x: expr): Bson =
     ## Perform dict-like structure conversion into bson
     result = toBson(x)
 
-template B*(key: string, val: Bson): Bson =  ## Shortcut for _initBsonDocument
-    let b = initBsonDocument()
+template B*(key: string, val: Bson): Bson =  ## Shortcut for `newBsonDocument`
+    let b = newBsonDocument()
     b[key] = val
     b
 
 template B*[T](key: string, values: seq[T]): Bson =
-    let b = initBsonDocument()
+    let b = newBsonDocument()
     b[key] = values
     b
 
@@ -581,7 +585,7 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprec
     ## Add array field to bson object
     result = bs
 
-    var arr: Bson = initBsonArray()
+    var arr: Bson = newBsonArray()
 
     for val in values:
         arr.valueArray.add(val)
@@ -655,7 +659,7 @@ converter seqCharToString(x: openarray[char]): string =
     result = newStringOfCap(len(x))
     for c in x: result = result & c
 
-proc initBsonDocument*(stream: Stream): Bson =
+proc newBsonDocument*(stream: Stream): Bson =
     ## Create new Bson document from byte stream
     discard stream.readInt32()   ## docSize
 
@@ -673,14 +677,12 @@ proc initBsonDocument*(stream: Stream): Bson =
             doc[name.string] = valueString
             return doc
         of BsonKindDocument:
-            let ds: int32 = stream.peekInt32()
-            var subdoc = initBsonDocument(s)
+            var subdoc = newBsonDocument(s)
             doc[name] = subdoc
             return doc
         of BsonKindArray:
-            let ds: int32 = stream.peekInt32()
-            var subdoc = initBsonDocument(s)
-            var subarr = initBsonArray()
+            var subdoc = newBsonDocument(s)
+            var subarr = newBsonArray()
             subarr.valueArray = @[]
             for k, v in subdoc.valueDocument: subarr.valueArray.add(v)
             doc[name.string] = subarr
@@ -691,7 +693,7 @@ proc initBsonDocument*(stream: Stream): Bson =
                 st: BsonSubtype = s.readChar().BsonSubtype
             case st:
             of BsonSubtypeMd5:
-                doc[name.string] = cast[MD5Digest](s.readStr(ds).cstring)
+                doc[name.string] = cast[ptr MD5Digest](s.readStr(ds).cstring)[]
                 return doc
             of BsonSubtypeGeneric:
                 doc[name.string] = bin(s.readStr(ds))
@@ -705,7 +707,7 @@ proc initBsonDocument*(stream: Stream): Bson =
             doc[name.string] = undefined()
             return doc
         of BsonKindOid:
-            let valueOid: Oid = cast[Oid](s.readStr(12).cstring)
+            let valueOid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
             doc[name.string] = valueOid
             return doc
         of BsonKindBool:
@@ -724,7 +726,7 @@ proc initBsonDocument*(stream: Stream): Bson =
         of BsonKindDBPointer:
             let
               refcol: string = s.readStr(s.readInt32() - 1)
-              refoid: Oid = cast[Oid](s.readStr(12).cstring)
+              refoid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
             discard s.readChar()
             doc[name.string] = dbref(refcol, refoid)
             return doc
@@ -752,7 +754,7 @@ proc initBsonDocument*(stream: Stream): Bson =
         else:
             raise newException(Exception, "Unexpected kind: " & $kind)
 
-    var document: Bson = initBsonDocument()
+    var document: Bson = newBsonDocument()
 
     while stream.peekChar() != 0.char:
         document = parseBson(stream, document)
@@ -760,9 +762,16 @@ proc initBsonDocument*(stream: Stream): Bson =
 
     return document
 
-proc initBsonDocument*(bytes: string): Bson =
+proc initBsonDocument*(stream: Stream): Bson {.deprecated.} =
+    return newBsonDocument(stream) 
+
+proc initBsonDocument*(bytes: string): Bson {.deprecated.} =
     ## Create new Bson document from byte string
-    initBsonDocument(newStringStream(bytes))
+    newBsonDocument(newStringStream(bytes))
+
+proc newBsonDocument*(bytes: string): Bson =
+    ## Create new Bson document from byte string
+    newBsonDocument(newStringStream(bytes))
 
 proc merge*(a, b: Bson): Bson =
 
@@ -828,10 +837,10 @@ when isMainModule:
 
     echo bdoc
     let bbytes = bdoc.bytes()
-    let recovered = initBsonDocument(bbytes)
+    let recovered = newBsonDocument(bbytes)
     echo "RECOVERED: ", recovered
 
-    var bdoc2 = initBsonArray()
+    var bdoc2 = newBsonArray()
     bdoc2 = bdoc2.add(2)
     bdoc2 = bdoc2.add(2)
     echo bdoc2

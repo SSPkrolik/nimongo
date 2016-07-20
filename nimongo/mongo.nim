@@ -52,9 +52,10 @@ type
     connected:     bool
     sock:          AsyncSocket
 
-  AsyncMongo* = ref object of MongoBase ## Mongo async client object
-    current: int                     ## Current (possibly) free socket to use
-    pool:    seq[AsyncLockedSocket]  ## Pool of connections
+  AsyncMongo* = ref object of MongoBase     ## Mongo async client object
+    current:        int                     ## Current (possibly) free socket to use
+    pool:           seq[AsyncLockedSocket]  ## Pool of connections
+    authenticated*: bool                    ## If authenticated set to true
 
   Database*[T] = ref object of MongoBase   ## MongoDB database object
     name:   string
@@ -264,7 +265,7 @@ proc limit*[T:Mongo|AsyncMongo](f: Cursor[T], numLimit: int32): Cursor[T] {.disc
 
 proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string =
   ## Prepare query and request queries for making OP_QUERY
-  var bfields: Bson = initBsonDocument()
+  var bfields: Bson = newBsonDocument()
   if f.fields.len() > 0:
       for field in f.fields.items():
           bfields[field] = 1'i32
@@ -305,7 +306,7 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
 
       if numberReturned > 0:
         for i in 0..<numberReturned:
-          yield initBsonDocument(stream)
+          yield newBsonDocument(stream)
       elif numberToReturn == 1:
         raise newException(NotFound, "No documents matching query were found")
       else:
@@ -356,7 +357,7 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
 
   if numberReturned > 0:
     for i in 0..<numberReturned:
-      result.add(initBsonDocument(stream))
+      result.add(newBsonDocument(stream))
     return
   elif numberToReturn == 1:
     raise newException(NotFound, "No documents matching query were found")
@@ -725,7 +726,7 @@ proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered:
 # User management
 # =============== #
 
-proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): bool =
+proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData: Bson = newBsonDocument(), roles: Bson = newBsonArray()): bool =
   ## Create new user for the specified database
   let createUserRequest = %*{
     "createUser": username,
@@ -740,7 +741,7 @@ proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData:
     n: 0
   )
 
-proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = initBsonDocument(), roles: Bson = initBsonArray()): Future[bool] {.async.} =
+proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = newBsonDocument(), roles: Bson = newBsonArray()): Future[bool] {.async.} =
   ## Create new user for the specified database via async client
   let
     createUserRequest = %*{
@@ -829,12 +830,12 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
       result = newString(d.len)
       copyMem(addr result[0], unsafeAddr d[0], d.len)
 
-  let client_key = Sha1Digest(hmac_sha1(saltedPass, "Client Key"))
+  let client_key = hmac_sha1(saltedPass, "Client Key")
   let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
 
   let auth_msg = join([fb, responsePayload, withoutProof], ",")
 
-  let client_sig = Sha1Digest(hmac_sha1(stored_key, auth_msg))
+  let client_sig = hmac_sha1(stored_key, auth_msg)
 
   var toEncode = newString(20)
   for i in 0..<client_key.len():
@@ -850,8 +851,8 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   }
   let responseContinue1 =  db["$cmd"].makeQuery(requestContinue1).one()
 
-  let server_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(salted_pass, "Server Key")))
-  let server_sig = base64.encode(stringWithSHA1Digest(Sha1Digest(hmac_sha1(server_key, auth_msg))))
+  let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
+  let server_sig = base64.encode(stringWithSHA1Digest(hmac_sha1(server_key, auth_msg)))
 
   parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
 
@@ -894,6 +895,8 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     "autoAuthorize": 1'i32
   }
   let responseStart = await db["$cmd"].makeQuery(requestStart).one()
+  if isNil(responseStart) or not isNil(responseStart["code"]): return false #connect failed or auth failure
+  db.client.authenticated = true
   let responsePayload = binstr(responseStart["payload"])
 
   proc parsePayload(p: string): Table[string, string] =
@@ -917,12 +920,12 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     result = newString(d.len)
     copyMem(addr result[0], unsafeAddr d[0], d.len)
 
-  let client_key = Sha1Digest(hmac_sha1(saltedPass, "Client Key"))
+  let client_key = hmac_sha1(saltedPass, "Client Key")
   let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
 
   let auth_msg = join([fb, responsePayload, withoutProof], ",")
 
-  let client_sig = Sha1Digest(hmac_sha1(stored_key, auth_msg))
+  let client_sig = hmac_sha1(stored_key, auth_msg)
 
   var toEncode = newString(20)
   for i in 0..<client_key.len():
@@ -937,9 +940,12 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     "payload": bin(client_final)
   }
   let responseContinue1 = await db["$cmd"].makeQuery(requestContinue1).one()
+  if responseContinue1["ok"].toFloat64() == 0.0:
+    db.client.authenticated = false
+    return false
 
-  let server_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(salted_pass, "Server Key")))
-  let server_sig = base64.encode(stringWithSHA1Digest(Sha1Digest(hmac_sha1(server_key, auth_msg))))
+  let server_key = stringWithSHA1Digest(hmac_sha1(salted_pass, "Server Key"))
+  let server_sig = base64.encode(stringWithSHA1Digest(hmac_sha1(server_key, auth_msg)))
 
   parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
 
@@ -1012,5 +1018,6 @@ proc newAsyncMongoDatabase*(u: Uri): Future[Database[AsyncMongo]] {.async.} =
     result.new()
     result.name = u.path.extractFileName()
     result.client = client
+    result.client.authenticated = await result.authenticateScramSha1(client.username, client.password)
 
 proc newAsyncMongoDatabase*(u: string): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u))

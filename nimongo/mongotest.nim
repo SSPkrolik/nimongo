@@ -310,10 +310,10 @@ suite "Mongo client querying test suite":
   test "[ASYNC] [SYNC] Query single document":
     let myId = genOid()
     check(sco.insert(%*{"string": "somedoc", "myid": myId}))
-    check(sco.find(%*{"myid": myId}).one()["myid"] == myId)
+    check(sco.find(%*{"myid": myId}).one()["myid"].toOid() == myId)
 
     check(waitFor(aco.insert(%*{"string": "somedoc", "myid": myId})))
-    check(waitFor(aco.find(%*{"myid": myId}).one())["myid"] == myId)
+    check(waitFor(aco.find(%*{"myid": myId}).one())["myid"].toOid() == myId)
 
   test "[ASYNC] [SYNC] Query multiple documents as a sequence":
     check(sco.insert(@[%*{"string": "value"}, %*{"string": "value"}]))

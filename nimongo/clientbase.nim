@@ -30,7 +30,7 @@ type
         replicas:     seq[tuple[host: string, port: uint16]]
         writeConcern: WriteConcern
 
-method init*(b: MongoBase, host: string, port: uint16) =
+method init*(b: MongoBase, host: string, port: uint16) {.base.} =
     b.host = host
     b.port = port
     b.requestID = 0
@@ -40,7 +40,7 @@ method init*(b: MongoBase, host: string, port: uint16) =
     b.password = ""
     b.writeConcern = writeConcernDefault()
 
-method init*(b: MongoBase, u: Uri) =
+method init*(b: MongoBase, u: Uri) {.base.} =
     let port = if u.port.len > 0: parseInt(u.port).uint16 else: DefaultMongoPort
     b.init(u.hostname, port)
     b.username = u.username
