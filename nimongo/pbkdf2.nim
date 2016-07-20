@@ -10,7 +10,7 @@ proc stringWithData(p: pointer, bufferLen: uint32): string =
 proc hmac_sha1_prf(keyPtr: pointer, keyLen: uint32,
          textPtr: pointer, textLen: uint32,
          randomPtr: pointer) {.cdecl.} =
-    let r = hmac_sha1(stringWithData(keyPtr, keyLen), stringWithData(textPtr, textLen))
+    let r = Sha1Digest(hmac_sha1(stringWithData(keyPtr, keyLen), stringWithData(textPtr, textLen)))
     for i, b in r:
        cast[ptr uint8](cast[int](randomPtr) + i)[] = b
 
