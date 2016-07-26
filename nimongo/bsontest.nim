@@ -41,11 +41,11 @@ suite "BSON serializer/deserializer test suite":
       "array": [1, 2, 3]
     }
     check(doc["int32"] == 1'i32)
-    doc["int32"] = 2'i32
+    doc["int32"] = toBson(2'i32)
     check(doc["int32"] == 2'i32)
-    doc["array"][0] = 10'i32
+    doc["array"][0] = toBson(10'i32)
     check(doc["array"][0] == 10'i32)
-    doc["newfield"] = "newvalue"
+    doc["newfield"] = "newvalue".toBson
     check(doc["newfield"] == "newvalue")
 
 

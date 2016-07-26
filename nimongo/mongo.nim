@@ -268,7 +268,7 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
   var bfields: Bson = newBsonDocument()
   if f.fields.len() > 0:
       for field in f.fields.items():
-          bfields[field] = 1'i32
+          bfields[field] = 1'i32.toBson()
   let squery = f.query.bytes()
   let sfields: string = if f.fields.len() > 0: bfields.bytes() else: ""
 
@@ -425,10 +425,10 @@ proc createCollection*(db: Database[Mongo], name: string, capped: bool = false, 
   ## Create collection inside database via sync connection
   var request = %*{"create": name}
 
-  if capped: request["capped"] = capped
-  if autoIndexId: request["autoIndexId"] = true
-  if maxSize > 0: request["size"] = maxSize
-  if maxSize > 0: request["max"] = maxDocs
+  if capped: request["capped"] = capped.toBson()
+  if autoIndexId: request["autoIndexId"] = true.toBson()
+  if maxSize > 0: request["size"] = maxSize.toBson()
+  if maxSize > 0: request["max"] = maxDocs.toBson()
 
   let response = db["$cmd"].makeQuery(request).one()
   return StatusReply(
@@ -439,10 +439,10 @@ proc createCollection*(db: Database[AsyncMongo], name: string, capped: bool = fa
   ## Create collection inside database via async connection
   var request = %*{"create": name}
 
-  if capped: request["capped"] = capped
-  if autoIndexId: request["autoIndexId"] = true
-  if maxSize > 0: request["size"] = maxSize
-  if maxSize > 0: request["max"] = maxDocs
+  if capped: request["capped"] = capped.toBson()
+  if autoIndexId: request["autoIndexId"] = true.toBson()
+  if maxSize > 0: request["size"] = maxSize.toBson()
+  if maxSize > 0: request["max"] = maxDocs.toBson()
 
   let response = await db["$cmd"].makeQuery(request).one()
   return StatusReply(
@@ -601,7 +601,7 @@ proc getLastError*(m: Mongo): StatusReply =
   return StatusReply(
     ok:  response["ok"] == 1.0'f64,
     n:   response["n"].toInt32(),
-    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: ""
+    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: "".toBson()
   )
 
 proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
@@ -610,7 +610,7 @@ proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
   return StatusReply(
     ok:  response["ok"] == 1.0'f64,
     n:   response["n"].toInt32(),
-    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: ""
+    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: "".toBson()
   )
 
 # ============= #

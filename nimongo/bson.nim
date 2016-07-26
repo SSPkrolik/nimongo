@@ -106,7 +106,7 @@ type
 proc raiseWrongNodeException(bs: Bson) =
     raise newException(Exception, "Wrong node kind: " & $bs.kind)
 
-converter toBson*(x: Oid): Bson =
+proc toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
     return Bson(kind: BsonKindOid, valueOid: x)
 
@@ -114,7 +114,7 @@ converter toOid*(x: Bson): Oid =
     ## Convert Bson to Mongo Object ID
     return x.valueOid
 
-converter toBson*(x: float64): Bson =
+proc toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
     return Bson(kind: BsonKindDouble, valueFloat64: x)
 
@@ -122,7 +122,7 @@ converter toFloat64*(x: Bson): float64 =
     ## Convert Bson object to float64
     return x.valueFloat64
 
-converter toBson*(x: string): Bson =
+proc toBson*(x: string): Bson =
     ## Convert string to Bson object
     if x == nil:
         return Bson(kind: BsonKindNull)
@@ -139,7 +139,7 @@ converter toString*(x: Bson): string =
     else:
         raiseWrongNodeException(x)
 
-converter toBson*(x: int64): Bson =
+proc toBson*(x: int64): Bson =
     ## Convert int64 to Bson object
     return Bson(kind: BsonKindInt64, valueInt64: x)
 
@@ -153,7 +153,7 @@ converter toInt64*(x: Bson): int64 =
     else:
         raiseWrongNodeException(x)
 
-converter toBson*(x: int32): Bson =
+proc toBson*(x: int32): Bson =
     ## Convert int32 to Bson object
     return Bson(kind: BsonKindInt32, valueInt32: x)
 
@@ -177,11 +177,11 @@ converter toInt*(x: Bson): int =
     else:
         raiseWrongNodeException(x)
 
-converter toBson*(x: int): Bson =
+proc toBson*(x: int): Bson =
     ## Convert int to Bson object
     return Bson(kind: BsonKindInt64, valueInt64: x)
 
-converter toBson*(x: bool): Bson =
+proc toBson*(x: bool): Bson =
     ## Convert bool to Bson object
     return Bson(kind: BsonKindBool, valueBool: x)
 
@@ -189,7 +189,7 @@ converter toBool*(x: Bson): bool =
     ## Convert Bson object to bool
     return x.valueBool
 
-converter toBson*(x: Time): Bson =
+proc toBson*(x: Time): Bson =
     ## Convert Time to Bson object
     return Bson(kind: BsonKindTimeUTC, valueTime: x)
 
@@ -197,7 +197,7 @@ converter toTime*(x: Bson): Time =
     ## Convert Bson object to Time
     return x.valueTime
 
-converter toBson*(x: BsonTimestamp): Bson =
+proc toBson*(x: BsonTimestamp): Bson =
     ## Convert inner BsonTimestamp to Bson object
     return Bson(kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
 
@@ -205,11 +205,11 @@ converter toTimestamp*(x: Bson): BsonTimestamp =
     ## Convert Bson object to inner BsonTimestamp type
     return x.valueTimestamp
 
-converter toBson*(x: MD5Digest): Bson =
+proc toBson*(x: MD5Digest): Bson =
     ## Convert MD5Digest to Bson object
     return Bson(kind: BsonKindBinary, subtype: BsonSubtypeMd5, valueDigest: x)
 
-converter toBson*(x: var MD5Context): Bson =
+proc toBson*(x: var MD5Context): Bson =
     ## Convert MD5Context to Bson object (still digest from current context).
     ## :WARNING: MD5Context is finalized during conversion.
     var digest: MD5Digest
@@ -669,12 +669,12 @@ proc newBsonDocument*(stream: Stream): Bson =
         discard s.readLine(name)
         case kind:
         of BsonKindDouble:
-            doc[name.string] = s.readFloat64()
+            doc[name.string] = s.readFloat64().toBson()
             return doc
         of BsonKindStringUTF8:
             let valueString: string = s.readStr(s.readInt32() - 1)
             discard s.readChar()
-            doc[name.string] = valueString
+            doc[name.string] = valueString.toBson()
             return doc
         of BsonKindDocument:
             var subdoc = newBsonDocument(s)
@@ -693,7 +693,7 @@ proc newBsonDocument*(stream: Stream): Bson =
                 st: BsonSubtype = s.readChar().BsonSubtype
             case st:
             of BsonSubtypeMd5:
-                doc[name.string] = cast[ptr MD5Digest](s.readStr(ds).cstring)[]
+                doc[name.string] = (cast[ptr MD5Digest](s.readStr(ds).cstring)[]).toBson()
                 return doc
             of BsonSubtypeGeneric:
                 doc[name.string] = bin(s.readStr(ds))
@@ -708,10 +708,10 @@ proc newBsonDocument*(stream: Stream): Bson =
             return doc
         of BsonKindOid:
             let valueOid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
-            doc[name.string] = valueOid
+            doc[name.string] = valueOid.toBson()
             return doc
         of BsonKindBool:
-            doc[name.string] = if s.readChar() == 0.char: false else: true
+            doc[name.string] = if s.readChar() == 0.char: false.toBson() else: true.toBson()
             return doc
         of BsonKindTimeUTC:
             let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
@@ -737,13 +737,13 @@ proc newBsonDocument*(stream: Stream): Bson =
             doc[name.string] = js(code)
             return doc
         of BsonKindInt32:
-            doc[name.string] = s.readInt32()
+            doc[name.string] = s.readInt32().toBson()
             return doc
         of BsonKindTimestamp:
-            doc[name.string] = cast[BsonTimestamp](s.readInt64())
+            doc[name.string] = cast[BsonTimestamp](s.readInt64()).toBson()
             return doc
         of BsonKindInt64:
-            doc[name.string] = s.readInt64()
+            doc[name.string] = s.readInt64().toBson()
             return doc
         of BsonKindMinimumKey:
             doc[name.string] = minkey()
