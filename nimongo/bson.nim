@@ -594,7 +594,7 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprec
 
 proc add*[T](bs: Bson, value: T): Bson {.discardable.} =
     result = bs
-    result.valueArray.add(value)
+    result.valueArray.add(value.toBson())
 
 proc del*(bs: Bson, key: string) =
     if bs.kind == BsonKindDocument:
