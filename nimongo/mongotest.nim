@@ -59,7 +59,7 @@ suite "Mongo instance administration commands test suite":
     check("smanual" in sdb.listCollections())
 
     discard waitFor(adb.createCollection("amanual"))
-    check("smanual" in waitFor(adb.listCollections()))
+    check("amanual" in waitFor(adb.listCollections()))
 
   test "[ASYNC] [SYNC] Command: 'listCollections'":
     let sclist = sdb.listCollections()
@@ -90,6 +90,17 @@ suite "Mongo connection error-handling operations":
   test "[ASYNC] [SYNC] Command: 'getLastError'":
     check(sm.getLastError().ok)
     check(waitFor(am.getLastError()).ok)
+
+  test "[ASYNC] [SYNC] Write operations error handling":
+    discard sdb.createCollection("smanual")
+    let sReplyCreate = sdb.createCollection("smanual")
+    check(not sReplyCreate.ok)
+    check(sReplyCreate.err.contains("already exists"))
+
+    discard waitFor(adb.createCollection("amanual"))
+    let aReplyCreate = waitFor(adb.createCollection("amanual"))
+    check(not aReplyCreate.ok)
+    check(aReplyCreate.err.contains("already exists"))
 
 suite "Authentication":
 
@@ -262,6 +273,7 @@ suite "Mongo client operations test suite":
     check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])))
     check(waitFor(aco.remove(%*{"string": "value"})).ok)
     check(waitFor(aco.find(%*{"string": "value"}).all()).len() == 0)
+
 
 suite "Mongo aggregation commands":
 
