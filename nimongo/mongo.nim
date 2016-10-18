@@ -326,7 +326,7 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
   var ls: AsyncLockedSocket = await f.collection.client.next()
 
   await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
-  
+
   # Read reply length
   var data: string = await ls.sock.recv(4)
   handleDisconnect(data, ls)
@@ -400,26 +400,18 @@ proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
 proc listDatabases*(sm: Mongo): seq[string] =
   ## Return list of databases on the server
   let response = sm["admin"]["$cmd"].makeQuery(%*{"listDatabases": 1}).one()
-  if response["ok"] == 0.0:
-    return @[]
-  elif response["ok"] == 1.0:
-    result = @[]
+  result = @[]
+  if response.isReplyOk:
     for db in response["databases"].items():
       result.add(db["name"].toString())
-  else:
-    raise new(Exception)
 
 proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
   ## Return list of databases on the server via async client
   let response = await am["admin"]["$cmd"].makeQuery(%*{"listDatabases": 1}).one()
-  if response["ok"] == 0.0:
-    return @[]
-  elif response["ok"] == 1.0:
-    result = @[]
+  result = @[]
+  if response.isReplyOk:
     for db in response["databases"].items():
       result.add(db["name"].toString())
-  else:
-    raise new(Exception)
 
 proc createCollection*(db: Database[Mongo], name: string, capped: bool = false, autoIndexId: bool = true, maxSize: int = 0, maxDocs: int = 0): StatusReply =
   ## Create collection inside database via sync connection
@@ -431,9 +423,7 @@ proc createCollection*(db: Database[Mongo], name: string, capped: bool = false, 
   if maxSize > 0: request["max"] = maxDocs.toBson()
 
   let response = db["$cmd"].makeQuery(request).one()
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64
-  )
+  return response.toStatusReply
 
 proc createCollection*(db: Database[AsyncMongo], name: string, capped: bool = false, autoIndexId: bool = true, maxSize: int = 0, maxDocs: int = 0): Future[StatusReply] {.async.} =
   ## Create collection inside database via async connection
@@ -445,15 +435,13 @@ proc createCollection*(db: Database[AsyncMongo], name: string, capped: bool = fa
   if maxSize > 0: request["max"] = maxDocs.toBson()
 
   let response = await db["$cmd"].makeQuery(request).one()
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64
-  )
+  return response.toStatusReply
 
 proc listCollections*(db: Database[Mongo], filter: Bson = %*{}): seq[string] =
   ## List collections inside specified database
   let response = db["$cmd"].makeQuery(%*{"listCollections": 1'i32}).one()
   result = @[]
-  if response["ok"] == 1.0:
+  if response.isReplyOk:
     for col in response["cursor"]["firstBatch"]:
       result.add(col["name"])
 
@@ -463,7 +451,7 @@ proc listCollections*(db: Database[AsyncMongo], filter: Bson = %*{}): Future[seq
     request = %*{"listCollections": 1'i32}
     response = await db["$cmd"].makeQuery(request).one()
   result = @[]
-  if response["ok"] == 1.0'f64:
+  if response.isReplyOk:
     for col in response["cursor"]["firstBatch"]:
       result.add(col["name"])
 
@@ -477,9 +465,7 @@ proc rename*(c: Collection[Mongo], newName: string, dropTarget: bool = false): S
     }
     response = c.db.client["admin"]["$cmd"].makeQuery(request).one()
   c.name = newName
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64
-  )
+  return response.toStatusReply
 
 proc rename*(c: Collection[AsyncMongo], newName: string, dropTarget: bool = false): Future[StatusReply] {.async.} =
   ## Rename collection via async connection
@@ -491,57 +477,41 @@ proc rename*(c: Collection[AsyncMongo], newName: string, dropTarget: bool = fals
     }
     response = await c.db.client["admin"]["$cmd"].makeQuery(request).one()
   c.name = newName
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64
-  )
+  return response.toStatusReply
 
 proc drop*(db: Database[Mongo]): bool =
   ## Drop database from server
   let response = db["$cmd"].makeQuery(%*{"dropDatabase": 1}).one()
-  return response["ok"] == 1.0
+  return response.isReplyOk
 
 proc drop*(db: Database[AsyncMongo]): Future[bool] {.async.} =
   ## Drop database from server via async connection
   let response = await db["$cmd"].makeQuery(%*{"dropDatabase": 1}).one()
-  return response["ok"] == 1.0
+  return response.isReplyOk
 
 proc drop*(c: Collection[Mongo]): tuple[ok: bool, message: string] =
   ## Drop collection from database
   let response = c.db["$cmd"].makeQuery(%*{"drop": c.name}).one()
-  let ok = response["ok"] == 1.0
-  return (ok: ok, message: if ok: "" else: response["errmsg"])
+  let status = response.toStatusReply
+  return (ok: status.ok, message: status.err)
 
 proc drop*(c: Collection[AsyncMongo]): Future[tuple[ok: bool, message: string]] {.async.} =
   ## Drop collection from database via async clinet
   let response = await c.db["$cmd"].makeQuery(%*{"drop": c.name}).one()
-  let ok = response["ok"] == 1.0
-  return (ok: ok, message: if ok: "" else: response["errmsg"])
+  let status = response.toStatusReply
+  return (ok: status.ok, message: status.err)
 
 proc count*(c: Collection[Mongo]): int =
   ## Return number of documents in collection
-  let x = c.db["$cmd"].makeQuery(%*{"count": c.name}).one()["n"]
-  if x.kind == BsonKindInt32:
-    return x.toInt32()
-  elif x.kind == BsonKindDouble:
-    return x.toFloat64.int
+  return c.db["$cmd"].makeQuery(%*{"count": c.name}).one().getReplyN
 
 proc count*(c: Collection[AsyncMongo]): Future[int] {.async.} =
   ## Return number of documents in collection via async client
-  let
-    res = await c.db["$cmd"].makeQuery(%*{"count": c.name}).one()
-    x = res["n"]
-  if x.kind == BsonKindInt32:
-    return x.toInt32()
-  elif x.kind == BsonKindDouble:
-    return x.toFloat64.int
+  return (await c.db["$cmd"].makeQuery(%*{"count": c.name}).one()).getReplyN
 
 proc count*(f: Cursor[Mongo]): int =
   ## Return number of documents in find query result
-  let x = f.collection.db["$cmd"].makeQuery(%*{"count": f.collection.name, "query": f.query["$query"]}).one()["n"]
-  if x.kind == BsonKindInt32:
-    return x.toInt32()
-  elif x.kind == BsonKindDouble:
-    return x.toFloat64().int
+  return f.collection.db["$cmd"].makeQuery(%*{"count": f.collection.name, "query": f.query["$query"]}).one().getReplyN
 
 proc count*(f: Cursor[AsyncMongo]): Future[int] {.async.} =
   ## Return number of document in find query result via async connection
@@ -550,11 +520,7 @@ proc count*(f: Cursor[AsyncMongo]): Future[int] {.async.} =
       "count": f.collection.name,
       "query": f.query["$query"]
     }).one()
-    x = response["n"]
-  if x.kind == BsonKindInt32:
-    return x.toInt32()
-  elif x.kind == BsonKindDouble:
-    return x.toFloat64().int
+  return response.getReplyN
 
 proc sort*[T:Mongo|AsyncMongo](f: Cursor[T], criteria: Bson): Cursor[T] =
   ## Setup sorting criteria
@@ -574,7 +540,7 @@ proc unique*(f: Cursor[Mongo], key: string): seq[string] =
     response = f.collection.db["$cmd"].makeQuery(request).one()
 
   result = @[]
-  if response["ok"] == 1.0'f64:
+  if response.isReplyOk:
     for item in response["values"].items():
       result.add(item.toString())
 
@@ -591,27 +557,19 @@ proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} 
     response = await f.collection.db["$cmd"].makeQuery(request).one()
 
   result = @[]
-  if response["ok"] == 1.0'f64:
+  if response.isReplyOk:
     for item in response["values"].items():
       result.add(item.toString())
 
 proc getLastError*(m: Mongo): StatusReply =
   ## Get last error happened in current connection
   let response = m["admin"]["$cmd"].makeQuery(%*{"getLastError": 1'i32}).one()
-  return StatusReply(
-    ok:  response["ok"] == 1.0'f64,
-    n:   response["n"].toInt32(),
-    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: "".toBson()
-  )
+  return response.toStatusReply
 
 proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
   ## Get last error happened in current connection
   let response = await am["admin"]["$cmd"].makeQuery(%*{"getLastError": 1'i32}).one()
-  return StatusReply(
-    ok:  response["ok"] == 1.0'f64,
-    n:   response["n"].toInt32(),
-    err: if response["err"].kind == BsonKindStringUTF8: response["err"] else: "".toBson()
-  )
+  return response.toStatusReply
 
 # ============= #
 # Insert API    #
@@ -628,10 +586,7 @@ proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, w
     }
     response = c.db["$cmd"].makeQuery(request).one()
 
-  return StatusReply(
-    ok: response["ok"] == 1'i32,
-    n: response["n"].toInt32()
-  )
+  return response.toStatusReply
 
 proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Insert new document into MongoDB via sync connection
@@ -648,10 +603,7 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = tr
     }
     response = await c.db["$cmd"].makeQuery(request).one()
 
-  return StatusReply(
-    ok: response["ok"] == 1'i32,
-    n: response["n"].toInt32()
-  )
+  return response.toStatusReply
 
 proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new document into MongoDB via async connection
@@ -670,10 +622,7 @@ proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, up
       "ordered": true
     }
     response = c.db["$cmd"].makeQuery(request).one()
-  return StatusReply(
-    ok: response["ok"] == 1'i32,
-    n: response["n"].toInt32()
-  )
+  return response.toStatusReply
 
 proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: bool, upsert: bool): Future[bool] {.async.} =
   ## Update MongoDB document[s] via async connection
@@ -683,10 +632,7 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
     "ordered": true
   }
   let response = await c.db["$cmd"].makeQuery(request).one()
-  return StatusReply(
-    ok: response["ok"] == 1'i32,
-    n: response["n"].toInt32()
-  )
+  return response.toStatusReply
 
 # ============ #
 # Remove API   #
@@ -702,10 +648,7 @@ proc remove*(c: Collection[Mongo], selector: Bson, limit: int = 0, ordered: bool
       "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
     }
     response = c.db["$cmd"].makeQuery(request).one()
-  return StatusReply(
-    ok: response["ok"] == 1'i32,
-    n:  response["n"].toInt32(),
-  )
+  return response.toStatusReply
 
 proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Delete document[s] from MongoDB via asyn connection
@@ -717,10 +660,7 @@ proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered:
       "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
     }
     response = await c.db["$cmd"].makeQuery(request).one()
-  return StatusReply(
-    ok: response["ok"] == 1'i32,
-    n:  response["n"].toInt32(),
-  )
+  return response.toStatusReply
 
 # =============== #
 # User management
@@ -736,10 +676,7 @@ proc createUser*(db: DataBase[Mongo], username: string, pwd: string, customData:
     "writeConcern": db.client.writeConcern
   }
   let response = db["$cmd"].makeQuery(createUserRequest).one()
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64,
-    n: 0
-  )
+  return response.isReplyOk
 
 proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, customData: Bson = newBsonDocument(), roles: Bson = newBsonArray()): Future[bool] {.async.} =
   ## Create new user for the specified database via async client
@@ -752,10 +689,7 @@ proc createUser*(db: Database[AsyncMongo], username: string, pwd: string, custom
       "writeConcern": db.client.writeConcern
     }
     response = await db["$cmd"].makeQuery(createUserRequest).one()
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64,
-    n: 0
-  )
+  return response.isReplyOk
 
 proc dropUser*(db: Database[Mongo], username: string): bool =
   ## Drop user from the db
@@ -765,10 +699,7 @@ proc dropUser*(db: Database[Mongo], username: string): bool =
       "writeConcern": db.client.writeConcern
       }
     response = db["$cmd"].makeQuery(dropUserRequest).one()
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64,
-    n: 0
-  )
+  return response.isReplyOk
 
 proc dropUser*(db: Database[AsyncMongo], username: string): Future[bool] {.async.} =
   ## Drop user from the db via async client
@@ -778,10 +709,7 @@ proc dropUser*(db: Database[AsyncMongo], username: string): Future[bool] {.async
       "writeConcern": db.client.writeConcern
     }
     response = await db["$cmd"].makeQuery(dropUserRequest).one()
-  return StatusReply(
-    ok: response["ok"] == 1.0'f64,
-    n: 0
-  )
+  return response.isReplyOk
 
 # ============== #
 # Authentication #
@@ -988,7 +916,7 @@ proc authenticate*(db: Database[Mongo], username: string, password: string): boo
     "autoAuthorize": 1'i32
   }
   let response = db["$cmd"].makeQuery(request).one()
-  return if response["ok"] == 0: false else: true
+  return response.isReplyOk
 
 proc connect*(m: Mongo): bool =
   ## Connect socket to mongo server

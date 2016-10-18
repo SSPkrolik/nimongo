@@ -7,3 +7,6 @@ type
 
     NotFound* = object of NimongoError
         ## Raises when querying of one documents returns empty result
+
+    ReplyFieldMissing* = object of NimongoError
+        ## Raises when reqired field in reply is missing
