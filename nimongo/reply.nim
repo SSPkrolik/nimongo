@@ -23,7 +23,11 @@ template parseReplyField(b: untyped, field: untyped, default: untyped, body: unt
 proc parseReplyOk(reply: Bson, isRequired: bool): bool {.raises: [ReplyFieldMissing, Exception]} =
   ## Parse "ok" field in database reply.
   parseReplyField(val, "ok", false):
-    result = val == 1.0'f64
+    case val.kind
+    of BsonKindDouble:
+      result = val.toFloat64 == 1.0'f64
+    else:
+      result = val.toInt == 1
 
 proc parseReplyN(reply: Bson, isRequired: bool): int {.raises: [ReplyFieldMissing, Exception]} =
   ## Parse "n" field in database reply.
