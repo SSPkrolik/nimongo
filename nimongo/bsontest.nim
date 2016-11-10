@@ -109,4 +109,12 @@ suite "BSON serializer/deserializer test suite":
     check(b["field0"] == 5'i32)
     check(b["field2"][0]["ar0"] == "1")
 
-echo ""
+  test "array length":
+    let arr = newBsonArray()
+    arr.add(%*{
+      "field3": "value2",
+      "field0": 5'i32
+    })
+
+    check(arr.len == 1)
+

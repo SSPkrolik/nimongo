@@ -592,6 +592,13 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprec
 
     result.valueDocument[key] = arr
 
+proc len*(bs: Bson):int =
+    if bs.kind == BsonKindArray:
+        result = bs.valueArray.len
+    else:
+        raiseWrongNodeException(bs)
+
+
 proc add*[T](bs: Bson, value: T): Bson {.discardable.} =
     result = bs
     result.valueArray.add(value.toBson())
@@ -763,7 +770,7 @@ proc newBsonDocument*(stream: Stream): Bson =
     return document
 
 proc initBsonDocument*(stream: Stream): Bson {.deprecated.} =
-    return newBsonDocument(stream) 
+    return newBsonDocument(stream)
 
 proc initBsonDocument*(bytes: string): Bson {.deprecated.} =
     ## Create new Bson document from byte string
