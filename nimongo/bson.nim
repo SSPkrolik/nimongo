@@ -65,7 +65,6 @@ type
     timestamp*: int32
 
   Bson* = ref object of RootObj  ## Bson Node
-    key: string
     case kind*: BsonKind
     of BsonKindDouble:           valueFloat64:     float64
     of BsonKindStringUTF8:       valueString:      string
