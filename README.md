@@ -21,7 +21,7 @@ or directly from Git repo:
 $ nimble install https://github.com/SSPkrolik/nimongo.git
 ```
 
-> WARNING! Current `master` version of `nimongo` works only with the
+> WARNING! Current `master` version of `nimongo` is tested only with the
 > latest version of Nim from git repo: `devel` branch.
 > Also nimongo is intended to support MongoDB versions >= 3.0.
 
