@@ -109,32 +109,12 @@ suite "BSON serializer/deserializer test suite":
     check(b["field0"] == 5'i32)
     check(b["field2"][0]["ar0"] == "1")
 
+  test "array length":
+    let arr = newBsonArray()
+    arr.add(%*{
+      "field3": "value2",
+      "field0": 5'i32
+    })
 
-    let doc2 = %*{
-      "double": 300,
-      "stringkey": "stringvalue",
-      "document": {
-        "double": 5436.5436,
-        "key": "value"
-      },
-      "array": [1, 0, 3],
-      "int32": 5436'i32,
-      "newkey": 100
-      }
-    check(diff(doc1,doc2).count == 3)
+    check(arr.len == 1)
 
-
-    let doc2 = %*{
-      "double": 300,
-      "stringkey": "stringvalue",
-      "document": {
-        "double": 5436.5436,
-        "key": "value"
-      },
-      "array": [1, 0, 3],
-      "int32": 5436'i32,
-      "newkey": 100
-      }
-    check(diff(doc1,doc2).count == 3)
-
-echo ""

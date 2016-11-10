@@ -655,29 +655,6 @@ iterator pairs*(bs: Bson): tuple[key: string, val: Bson] =
         for k, v in bs.valueDocument:
             yield (k, v)
 
-proc diff*(d1: Bson, d2: Bson): tuple[count: int, changed: Bson] =
-  ## Compares two bson documents or arrays and returns the changes  in doc1
-  result = (0,initBsonDocument())
-  var bskeys: seq[string]
-  bskeys = @[]
-
-  if d1.kind == BsonKindDocument:
-    for item in d1:
-        if item in d2:
-          echo item & " deleted"
-          inc result.count
-        discard """ else:
-           if not( item == d2[item]):
-            echo item & " changed"
-            inc result.count """
-        bskeys.add(item.key)
-
-    for item in d2:
-        if not(item in bskeys) and item in d1:
-          echo item.key  & " added"
-          inc result.count
-  return result
-
 proc contains*(bs: Bson, key: string): bool =
   ## Checks if Bson document has a specified field
   if bs.kind == BsonKindDocument:
@@ -794,7 +771,7 @@ proc newBsonDocument*(stream: Stream): Bson =
     return document
 
 proc initBsonDocument*(stream: Stream): Bson {.deprecated.} =
-    return newBsonDocument(stream) 
+    return newBsonDocument(stream)
 
 proc initBsonDocument*(bytes: string): Bson {.deprecated.} =
     ## Create new Bson document from byte string
