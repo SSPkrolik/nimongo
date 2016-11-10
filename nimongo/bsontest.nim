@@ -123,4 +123,18 @@ suite "BSON serializer/deserializer test suite":
       }
     check(diff(doc1,doc2).count == 3)
 
+
+    let doc2 = %*{
+      "double": 300,
+      "stringkey": "stringvalue",
+      "document": {
+        "double": 5436.5436,
+        "key": "value"
+      },
+      "array": [1, 0, 3],
+      "int32": 5436'i32,
+      "newkey": 100
+      }
+    check(diff(doc1,doc2).count == 3)
+
 echo ""
