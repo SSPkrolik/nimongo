@@ -624,7 +624,7 @@ proc update*(c: Collection[Mongo], selector: Bson, update: Bson, multi: bool, up
     response = c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply
 
-proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: bool, upsert: bool): Future[bool] {.async.} =
+proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: bool, upsert: bool): Future[StatusReply] {.async.} =
   ## Update MongoDB document[s] via async connection
   let request = %*{
     "update": c.name,
