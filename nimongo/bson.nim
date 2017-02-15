@@ -595,6 +595,8 @@ proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprec
 proc len*(bs: Bson):int =
     if bs.kind == BsonKindArray:
         result = bs.valueArray.len
+    elif bs.kind == BsonKindDocument:
+        result = bs.valueDocument.len
     else:
         raiseWrongNodeException(bs)
 
