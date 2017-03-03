@@ -131,15 +131,16 @@ proc next(am: AsyncMongo): Future[AsyncLockedSocket] {.async.} =
   while true:
     for _ in 0..<am.pool.len():
       am.current = (am.current + 1) mod am.pool.len()
-      if not am.pool[am.current].inuse:
-        if not am.pool[am.current].connected:
+      let s = am.pool[am.current]
+      if not s.inuse:
+        s.inuse = true
+        if not s.connected:
           try:
-            await am.pool[am.current].sock.connect(am.host, asyncdispatch.Port(am.port))
-            am.pool[am.current].connected = true
+            await s.sock.connect(am.host, asyncdispatch.Port(am.port))
+            s.connected = true
           except OSError:
             continue
-        am.pool[am.current].inuse = true
-        return am.pool[am.current]
+        return s
     await sleepAsync(1)
 
 proc replica*[T:Mongo|AsyncMongo](mb: T, nodes: seq[tuple[host: string, port: uint16]]) =
@@ -154,13 +155,15 @@ method kind*(am: AsyncMongo): ClientKind = ClientKindAsync ## Async Mongo client
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
+  var connected = false
   for ls in am.pool.items():
     try:
       await ls.sock.connect(am.host, asyncdispatch.Port(am.port))
       ls.connected = true
+      connected = true
     except OSError:
       continue
-  return any(am.pool, proc(item: AsyncLockedSocket): bool = item.connected)
+  return connected
 
 proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     ## Retrieves database from Mongo
@@ -313,10 +316,10 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
         discard
 
 proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
-  ## Perform asynchronouse OP_QUERY operation to MongoDB.
+  ## Perform asynchronous OP_QUERY operation to MongoDB.
 
   # Template for disconnection handling
-  template handleDisconnect(response: var string, sock: AsyncLockedSocket) =
+  template handleDisconnect(response: string, sock: AsyncLockedSocket) =
     if response == "":
       ls.connected = false
       ls.inuse = false
@@ -332,14 +335,14 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
   handleDisconnect(data, ls)
 
   var stream: Stream = newStringStream(data)
-  let messageLength: int32 = stream.readInt32()
+  let messageLength: int32 = stream.readInt32() - 4
 
   ## Read data
   data = ""
-  while data.len < messageLength - 4:
-    var chunk: string = await ls.sock.recv(messageLength - 4)
+  while data.len < messageLength:
+    let chunk: string = await ls.sock.recv(messageLength - data.len)
     handleDisconnect(chunk, ls)
-    data = data & chunk
+    data &= chunk
 
   ls.inuse = false
 
