@@ -672,30 +672,26 @@ proc newBsonDocument*(stream: Stream): Bson =
     ## Create new Bson document from byte stream
     discard stream.readInt32()   ## docSize
 
-    proc parseBson(s: Stream, doc: Bson): Bson =
+    proc parseBson(s: Stream, doc: Bson) =
         let kind: BsonKind = s.readChar()
         var name: TaintedString = ""
         discard s.readLine(name)
         case kind:
         of BsonKindDouble:
             doc[name.string] = s.readFloat64().toBson()
-            return doc
         of BsonKindStringUTF8:
             let valueString: string = s.readStr(s.readInt32() - 1)
             discard s.readChar()
             doc[name.string] = valueString.toBson()
-            return doc
         of BsonKindDocument:
             var subdoc = newBsonDocument(s)
             doc[name] = subdoc
-            return doc
         of BsonKindArray:
             var subdoc = newBsonDocument(s)
             var subarr = newBsonArray()
             subarr.valueArray = @[]
             for k, v in subdoc.valueDocument: subarr.valueArray.add(v)
             doc[name.string] = subarr
-            return doc
         of BsonKindBinary:
             let
                 ds: int32 = s.readInt32()
@@ -703,73 +699,55 @@ proc newBsonDocument*(stream: Stream): Bson =
             case st:
             of BsonSubtypeMd5:
                 doc[name.string] = (cast[ptr MD5Digest](s.readStr(ds).cstring)[]).toBson()
-                return doc
             of BsonSubtypeGeneric:
                 doc[name.string] = bin(s.readStr(ds))
-                return doc
             of BsonSubtype.BsonSubtypeUserDefined:
                 doc[name.string] = binuser(s.readStr(ds))
-                return doc
             else:
                 raise newException(Exception, "Unexpected subtype: " & $st)
         of BsonKindUndefined:
             doc[name.string] = undefined()
-            return doc
         of BsonKindOid:
             let valueOid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
             doc[name.string] = valueOid.toBson()
-            return doc
         of BsonKindBool:
             doc[name.string] = if s.readChar() == 0.char: false.toBson() else: true.toBson()
-            return doc
         of BsonKindTimeUTC:
             let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
             doc[name.string] = timeUTC
-            return doc
         of BsonKindNull:
             doc[name.string] = null()
-            return doc
         of BsonKindRegexp:
             doc[name.string] = regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
-            return doc
         of BsonKindDBPointer:
             let
               refcol: string = s.readStr(s.readInt32() - 1)
               refoid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
             discard s.readChar()
             doc[name.string] = dbref(refcol, refoid)
-            return doc
         of BsonKindJSCode:
             let
               code: string = s.readStr(s.readInt32() - 1)
             discard s.readChar()
             doc[name.string] = js(code)
-            return doc
         of BsonKindInt32:
             doc[name.string] = s.readInt32().toBson()
-            return doc
         of BsonKindTimestamp:
             doc[name.string] = cast[BsonTimestamp](s.readInt64()).toBson()
-            return doc
         of BsonKindInt64:
             doc[name.string] = s.readInt64().toBson()
-            return doc
         of BsonKindMinimumKey:
             doc[name.string] = minkey()
-            return doc
         of BsonKindMaximumKey:
             doc[name.string] = maxkey()
-            return doc
         else:
             raise newException(Exception, "Unexpected kind: " & $kind)
 
-    var document: Bson = newBsonDocument()
+    result = newBsonDocument()
 
     while stream.peekChar() != 0.char:
-        document = parseBson(stream, document)
+        parseBson(stream, result)
     discard stream.readChar()
-
-    return document
 
 proc initBsonDocument*(stream: Stream): Bson {.deprecated.} =
     return newBsonDocument(stream)
