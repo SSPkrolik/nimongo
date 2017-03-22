@@ -546,6 +546,15 @@ proc bin*(bindata: string): Bson =
     )
 
 proc binstr*(x: Bson): string =
+    case x.subtype:
+    of BsonSubtypeGeneric:     return x.valueGeneric
+    of BsonSubtypeFunction:    return x.valueFunction
+    of BsonSubtypeBinaryOld:   return x.valueBinOld
+    of BsonSubtypeUuidOld:     return x.valueUuidOld
+    of BsonSubtypeUuid:        return x.valueUuid
+    of BsonSubtypeUserDefined: return x.valueUserDefined
+    else:
+        raiseWrongNodeException(x)
     return x.valueGeneric
 
 proc binuser*(bindata: string): Bson =
