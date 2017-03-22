@@ -555,7 +555,6 @@ proc binstr*(x: Bson): string =
     of BsonSubtypeUserDefined: return x.valueUserDefined
     else:
         raiseWrongNodeException(x)
-    return x.valueGeneric
 
 proc binuser*(bindata: string): Bson =
     ## Create new binray Bson object with 'user-defined' subtype
