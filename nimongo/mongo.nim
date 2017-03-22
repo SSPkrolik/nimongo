@@ -155,15 +155,13 @@ method kind*(am: AsyncMongo): ClientKind = ClientKindAsync ## Async Mongo client
 
 proc connect*(am: AsyncMongo): Future[bool] {.async.} =
   ## Establish asynchronous connection with Mongo server
-  var connected = false
-  for ls in am.pool.items():
+  for ls in am.pool:
     try:
       await ls.sock.connect(am.host, asyncdispatch.Port(am.port))
       ls.connected = true
-      connected = true
+      result = true
     except OSError:
       continue
-  return connected
 
 proc `[]`*[T:Mongo|AsyncMongo](client: T, dbName: string): Database[T] =
     ## Retrieves database from Mongo
@@ -315,7 +313,7 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
       else:
         discard
 
-proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip: int32): Future[seq[Bson]] {.async.} =
+proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32, lockedSocket: AsyncLockedSocket = nil): Future[seq[Bson]] {.async.} =
   ## Perform asynchronous OP_QUERY operation to MongoDB.
 
   # Template for disconnection handling
@@ -326,7 +324,9 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn: int32, numberToSkip
       raise newException(CommunicationError, "Disconnected from MongoDB server")
 
   ## Private procedure for performing actual query to Mongo via async client
-  var ls: AsyncLockedSocket = await f.collection.client.next()
+  var ls = lockedSocket
+  if ls.isNil:
+    ls = await f.collection.client.next()
 
   await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
 
@@ -383,6 +383,11 @@ proc one*(f: Cursor[Mongo]): Bson =
 proc one*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
   ## Perform MongoDB query asynchronously and return first matching document.
   let docs = await f.performFindAsync(1, f.nskip)
+  return docs[0]
+
+proc one(f: Cursor[AsyncMongo], ls: AsyncLockedSocket): Future[Bson] {.async.} =
+  # Internal proc used for sending authentication requests on particular socket
+  let docs = await f.performFindAsync(1, f.nskip, ls)
   return docs[0]
 
 iterator items*(f: Cursor): Bson =
@@ -809,8 +814,8 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
           raise newException(Exception, "SASL conversation failed to complete.")
   return true
 
-proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password: string): Future[bool] {.async.} =
-  ## Authenticate connection (async) using SCRAM-SHA-1 method
+proc authenticateScramSha1(db: Database[AsyncMongo], username, password: string, ls: AsyncLockedSocket): Future[bool] {.async.} =
+  ## Authenticate connection (async) using SCRAM-SHA-1 method on particular socket
   if username == "" or password == "":
     return false
 
@@ -825,7 +830,7 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     "payload": bin("n,," & fb),
     "autoAuthorize": 1'i32
   }
-  let responseStart = await db["$cmd"].makeQuery(requestStart).one()
+  let responseStart = await db["$cmd"].makeQuery(requestStart).one(ls)
   if isNil(responseStart) or not isNil(responseStart["code"]): return false #connect failed or auth failure
   db.client.authenticated = true
   let responsePayload = binstr(responseStart["payload"])
@@ -851,7 +856,7 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     result = newString(d.len)
     copyMem(addr result[0], unsafeAddr d[0], d.len)
 
-  let client_key = Sha1Digest(hmac_sha1(saltedPass, "Client Key"))
+  let client_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(saltedPass, "Client Key")))
   let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
 
   let auth_msg = join([fb, responsePayload, withoutProof], ",")
@@ -870,7 +875,7 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
     "conversationId": toInt32(responseStart["conversationId"]),
     "payload": bin(client_final)
   }
-  let responseContinue1 = await db["$cmd"].makeQuery(requestContinue1).one()
+  let responseContinue1 = await db["$cmd"].makeQuery(requestContinue1).one(ls)
   if responseContinue1["ok"].toFloat64() == 0.0:
     db.client.authenticated = false
     return false
@@ -897,7 +902,7 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username: string, password:
       "conversationId": responseContinue1["conversationId"],
       "payload": ""
     }
-    let responseContinue2 = await db["$cmd"].makeQuery(requestContinue2).one()
+    let responseContinue2 = await db["$cmd"].makeQuery(requestContinue2).one(ls)
     if not responseContinue2["done"].toBool():
       raise newException(Exception, "SASL conversation failed to complete.")
   return true
@@ -949,6 +954,12 @@ proc newAsyncMongoDatabase*(u: Uri): Future[Database[AsyncMongo]] {.async.} =
     result.new()
     result.name = u.path.extractFileName()
     result.client = client
-    result.client.authenticated = await result.authenticateScramSha1(client.username, client.password)
+
+    var authenticated = newSeq[Future[bool]]()
+    for s in client.pool:
+      authenticated.add(result.authenticateScramSha1(client.username, client.password, s))
+
+    let authRes = await all(authenticated)
+    client.authenticated = authRes.any() do(x: bool) -> bool: x
 
 proc newAsyncMongoDatabase*(u: string): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u))
