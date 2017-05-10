@@ -509,6 +509,12 @@ proc drop*(c: Collection[AsyncMongo]): Future[tuple[ok: bool, message: string]] 
   let status = response.toStatusReply
   return (ok: status.ok, message: status.err)
 
+proc stats*(c: Collection[Mongo]): Bson =
+  return c.db["$cmd"].makeQuery(%*{"collStats": c.name}).one()
+
+proc stats*(c: Collection[AsyncMongo]): Future[Bson] {.async.} =
+  return await c.db["$cmd"].makeQuery(%*{"collStats": c.name}).one()
+
 proc count*(c: Collection[Mongo]): int =
   ## Return number of documents in collection
   return c.db["$cmd"].makeQuery(%*{"count": c.name}).one().getReplyN
