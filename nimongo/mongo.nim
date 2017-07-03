@@ -22,8 +22,7 @@ import os
 import bson except `()`
 import timeit
 
-import pbkdf2
-import sha1, hmac
+import scram/client
 
 import auth
 import clientbase
@@ -734,77 +733,35 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   if username == "" or password == "":
     return false
 
-  let uname = username.replace("=", "=3D").replace(",", "=2C")
-  let rand = random.random(1.0)
-  let nonce = base64.encode(($rand)[2..^1])
-  let fb = "n=" & uname & ",r=" & nonce
+  var scramClient = newScramClient[SHA1Digest]()
+  let clientFirstMessage = scramClient.prepareFirstMessage(username)
 
   let requestStart = %*{
     "saslStart": 1'i32,
     "mechanism": "SCRAM-SHA-1",
-    "payload": bin("n,," & fb),
+    "payload": bin(clientFirstMessage),
     "autoAuthorize": 1'i32
   }
   let responseStart = db["$cmd"].makeQuery(requestStart).one()
   ## line to check if connect worked
   if isNil(responseStart) or not isNil(responseStart["code"]): return false #connect failed or auth failure
   db.client.authenticated = true
-  let responsePayload = binstr(responseStart["payload"])
-
-  proc parsePayload(p: string): Table[string, string] =
-    result = initTable[string, string]()
-    for item in p.split(","):
-      let e = item.find('=')
-      let key = item[0..e - 1]
-      let val = item[e + 1..^1]
-      result[key] = val
-
-  var parsedPayload = parsePayload(responsePayload)
-  let iterations = parseInt(parsedPayload["i"])
-  let salt = base64.decode(parsedPayload["s"])
-  let rnonce = parsedPayload["r"]
-
-  let withoutProof = "c=biws,r=" & rnonce
-  let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
-  var saltedPass = pbkdf2_hmac_sha1(20, passwordDigest, salt, iterations.uint32)
-
-  proc stringWithSHA1Digest(d: SHA1Digest): string =
-      result = newString(d.len)
-      copyMem(addr result[0], unsafeAddr d[0], d.len)
-
-  let client_key = Sha1Digest(hmac_sha1(saltedPass, "Client Key"))
-  let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
-
-  let auth_msg = join([fb, responsePayload, withoutProof], ",")
-
-  let client_sig = Sha1Digest(hmac_sha1(stored_key, auth_msg))
-
-  var toEncode = newString(20)
-  for i in 0..<client_key.len():
-    toEncode[i] = cast[char](cast[uint8](client_key[i]) xor cast[uint8](client_sig[i]))
-
-  let client_proof = "p=" & base64.encode(toEncode)
-  let client_final = join([without_proof, client_proof], ",")
-
+  let
+    responsePayload = binstr(responseStart["payload"])
+    passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
+    clientFinalMessage = scramClient.prepareFinalMessage(passwordDigest, responsePayload)
   let requestContinue1 = %*{
     "saslContinue": 1'i32,
     "conversationId": toInt32(responseStart["conversationId"]),
-    "payload": bin(client_final)
+    "payload": bin(clientFinalMessage)
   }
   let responseContinue1 =  db["$cmd"].makeQuery(requestContinue1).one()
 
-  let server_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(salted_pass, "Server Key")))
-  let server_sig = base64.encode(stringWithSHA1Digest(Sha1Digest(hmac_sha1(server_key, auth_msg))))
-
-  parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
-
-  proc compare_digest(a, b: string): bool =
-    var res : uint8
-    for i in 0 ..< a.len:
-      res = res or (cast[uint8](a[i]) xor cast[uint8](b[i]))
-    result = res == 0
-
-  if not compare_digest(parsedPayload["v"], server_sig):
+  if responseContinue1["ok"].toFloat64() == 0.0:
+    db.client.authenticated = false
+    return false
+  
+  if not scramClient.verifyServerFinalMessage(binstr(responseContinue1["payload"])):
       raise newException(Exception, "Server returned an invalid signature.")
 
   # Depending on how it's configured, Cyrus SASL (which the server uses)
@@ -825,79 +782,34 @@ proc authenticateScramSha1(db: Database[AsyncMongo], username, password: string,
   if username == "" or password == "":
     return false
 
-  let uname = username.replace("=", "=3D").replace(",", "=2C")
-  let rand = random.random(1.0)
-  let nonce = base64.encode(($rand)[2..^1])
-  let fb = "n=" & uname & ",r=" & nonce
+  var scramClient = newScramClient[SHA1Digest]()
+  let clientFirstMessage = scramClient.prepareFirstMessage(username)
 
   let requestStart = %*{
     "saslStart": 1'i32,
     "mechanism": "SCRAM-SHA-1",
-    "payload": bin("n,," & fb),
+    "payload": bin(clientFirstMessage),
     "autoAuthorize": 1'i32
   }
   let responseStart = await db["$cmd"].makeQuery(requestStart).one(ls)
   if isNil(responseStart) or not isNil(responseStart["code"]): return false #connect failed or auth failure
   db.client.authenticated = true
-  let responsePayload = binstr(responseStart["payload"])
-
-  proc parsePayload(p: string): Table[string, string] =
-    result = initTable[string, string]()
-    for item in p.split(","):
-      let e = item.find('=')
-      let key = item[0..e - 1]
-      let val = item[e + 1..^1]
-      result[key] = val
-
-  var parsedPayload = parsePayload(responsePayload)
-  let iterations = parseInt(parsedPayload["i"])
-  let salt = base64.decode(parsedPayload["s"])
-  let rnonce = parsedPayload["r"]
-
-  let withoutProof = "c=biws,r=" & rnonce
-  let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
-  var saltedPass = pbkdf2_hmac_sha1(20, passwordDigest, salt, iterations.uint32)
-
-  proc stringWithSHA1Digest(d: SHA1Digest): string =
-    result = newString(d.len)
-    copyMem(addr result[0], unsafeAddr d[0], d.len)
-
-  let client_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(saltedPass, "Client Key")))
-  let stored_key = stringWithSHA1Digest(sha1.compute(client_key))
-
-  let auth_msg = join([fb, responsePayload, withoutProof], ",")
-
-  let client_sig = Sha1Digest(hmac_sha1(stored_key, auth_msg))
-
-  var toEncode = newString(20)
-  for i in 0..<client_key.len():
-    toEncode[i] = cast[char](cast[uint8](client_key[i]) xor cast[uint8](client_sig[i]))
-
-  let client_proof = "p=" & base64.encode(toEncode)
-  let client_final = join([without_proof, client_proof], ",")
+  let
+    responsePayload = binstr(responseStart["payload"])
+    passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
+    clientFinalMessage = scramClient.prepareFinalMessage(passwordDigest, responsePayload)
 
   let requestContinue1 = %*{
     "saslContinue": 1'i32,
     "conversationId": toInt32(responseStart["conversationId"]),
-    "payload": bin(client_final)
+    "payload": bin(clientFinalMessage)
   }
   let responseContinue1 = await db["$cmd"].makeQuery(requestContinue1).one(ls)
   if responseContinue1["ok"].toFloat64() == 0.0:
     db.client.authenticated = false
     return false
 
-  let server_key = stringWithSHA1Digest(Sha1Digest(hmac_sha1(salted_pass, "Server Key")))
-  let server_sig = base64.encode(stringWithSHA1Digest(Sha1Digest(hmac_sha1(server_key, auth_msg))))
-
-  parsedPayload = parsePayload(binstr(responseContinue1["payload"]))
-
-  proc compare_digest(a, b: string): bool =
-    var res : uint8
-    for i in 0 ..< a.len:
-      res = res or (cast[uint8](a[i]) xor cast[uint8](b[i]))
-    result = res == 0
-
-  if not compare_digest(parsedPayload["v"], server_sig):
+  if not scramClient.verifyServerFinalMessage(binstr(responseContinue1["payload"])):
     raise newException(Exception, "Server returned an invalid signature.")
 
   # Depending on how it's configured, Cyrus SASL (which the server uses)
