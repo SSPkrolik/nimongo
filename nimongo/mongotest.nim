@@ -110,11 +110,11 @@ suite "Authentication":
     discard
 
   test "[ASYNC] [SYNC] Command: 'authenticate', method: 'SCRAM-SHA-1'":
-    check(sdb.createUser("test", "test"))
-    let authtestdb = newMongoDatabase("mongodb://test:test@localhost:27017/testdb")
+    check(sdb.createUser("test1", "test"))
+    let authtestdb = newMongoDatabase("mongodb://test1:test@localhost:27017/testdb")
     check($authtestdb == "testdb")
     authtestdb[TestSyncCol].insert(%*{"data": "auth"})
-    check(sdb.dropUser("test"))
+    check(sdb.dropUser("test1"))
 
     check(waitFor(adb.createUser("test2", "test2")))
     let authtestdb2 = waitFor(newAsyncMongoDatabase("mongodb://test2:test2@localhost:27017/testdb"))

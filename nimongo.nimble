@@ -5,5 +5,4 @@ license     = "MIT"
 author      = "Rostyslav Dzinko <rostislav.dzinko@gmail.com>"
 
 # Dependencies
-requires "sha1"
-requires "hmac"
+requires "scram >= 0.1.2"
