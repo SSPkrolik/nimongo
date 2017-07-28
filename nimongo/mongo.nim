@@ -647,6 +647,40 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
   let response = await c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply
 
+# ==================== #
+# Find and modify API  #
+# ==================== #
+
+proc findAndModify*(c: Collection[Mongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
+  ## Finds and modifies MongoDB document
+  let request = %*{
+    "findAndModify": c.name,
+    "query": selector,
+    "update": update,
+    "new": afterUpdate,
+    "upsert": upsert,
+    "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+  }
+  if not sort.isNil:
+    request["sort"] = sort
+  let response = c.db["$cmd"].makeQuery(request).one()
+  return response.toStatusReply
+
+proc findAndModify*(c: Collection[AsyncMongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
+  ## Finds and modifies MongoDB document via async connection
+  let request = %*{
+    "findAndModify": c.name,
+    "query": selector,
+    "update": update,
+    "new": afterUpdate,
+    "upsert": upsert,
+    "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+  }
+  if not sort.isNil:
+    request["sort"] = sort
+  let response = await c.db["$cmd"].makeQuery(request).one()
+  return response.toStatusReply
+
 # ============ #
 # Remove API   #
 # ============ #
@@ -760,7 +794,7 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   if responseContinue1["ok"].toFloat64() == 0.0:
     db.client.authenticated = false
     return false
-  
+
   if not scramClient.verifyServerFinalMessage(binstr(responseContinue1["payload"])):
       raise newException(Exception, "Server returned an invalid signature.")
 
