@@ -50,7 +50,7 @@ type
     authenticated: bool
     connected:     bool
     sock:          AsyncSocket
-    queue:         ref Table[int32, Future[seq[Bson]]]
+    queue:         TableRef[int32, Future[seq[Bson]]]
 
   AsyncMongo* = ref object of MongoBase     ## Mongo async client object
     current:        int                     ## Current (possibly) free socket to use
@@ -336,8 +336,6 @@ proc handleResponses(ls: AsyncLockedSocket): Future[void] {.async.} =
       handleDisconnect(chunk, ls)
       data &= chunk
 
-    ls.inuse = false
-
     stream = newStringStream(data)
 
     discard stream.readInt32()                     ## requestID
@@ -369,7 +367,8 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32
 
   let requestId = f.collection.client.nextRequestId()
   await ls.sock.send(prepareQuery(f, requestId, numberToReturn, numberToSkip))
-  let response = new Future[seq[Bson]]
+  ls.inuse = false
+  let response = newFuture[seq[Bson]]("recv")
   ls.queue[requestId] = response
   if ls.queue.len == 1:
     asyncCheck handleResponses(ls)
