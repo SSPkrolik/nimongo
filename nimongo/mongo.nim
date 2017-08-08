@@ -50,6 +50,7 @@ type
     authenticated: bool
     connected:     bool
     sock:          AsyncSocket
+    queue:         TableRef[int32, Future[seq[Bson]]]
 
   AsyncMongo* = ref object of MongoBase     ## Mongo async client object
     current:        int                     ## Current (possibly) free socket to use
@@ -103,7 +104,8 @@ proc newAsyncLockedSocket(): AsyncLockedSocket =
     inuse:         false,
     authenticated: false,
     connected:     false,
-    sock:          newAsyncSocket()
+    sock:          newAsyncSocket(),
+    queue:         newTable[int32, Future[seq[Bson]]]()
   )
 
 proc newAsyncMongo*(host: string = "127.0.0.1", port: uint16 = DefaultMongoPort, maxConnections=16): AsyncMongo =
@@ -123,7 +125,7 @@ proc newAsyncMongoWithURI*(u: Uri, maxConnections=16): AsyncMongo =
       result.pool.add(newAsyncLockedSocket())
     result.current = -1
 
-proc newAsyncMongoWithURI*(u: string): AsyncMongo = newAsyncMongoWithURI(parseUri(u))
+proc newAsyncMongoWithURI*(u: string, maxConnections=16): AsyncMongo = newAsyncMongoWithURI(parseUri(u), maxConnections)
 
 proc next(am: AsyncMongo): Future[AsyncLockedSocket] {.async.} =
   ## Retrieves next non-in-use async socket for request
@@ -263,7 +265,7 @@ proc limit*[T:Mongo|AsyncMongo](f: Cursor[T], numLimit: int32): Cursor[T] {.disc
     result = f
     result.nlimit = numLimit
 
-proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string =
+proc prepareQuery(f: Cursor, requestId: int32, numberToReturn: int32, numberToSkip: int32): string =
   ## Prepare query and request queries for making OP_QUERY
   var bfields: Bson = newBsonDocument()
   if f.fields.len() > 0:
@@ -275,7 +277,7 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
   result = ""
   let colName = $f.collection
   buildMessageHeader(int32(29 + colName.len + squery.len + sfields.len),
-    f.collection.client.nextRequestId(), 0, result)
+    requestId, 0, result)
 
   buildMessageQuery(0, colName, numberToSkip , numberToReturn, result)
   result &= squery
@@ -284,7 +286,7 @@ proc prepareQuery(f: Cursor, numberToReturn: int32, numberToSkip: int32): string
 iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int32): Bson {.closure.} =
   ## Private procedure for performing actual query to Mongo
   {.locks: [f.collection.client.requestLock].}:
-    if f.collection.client.sock.trySend(prepareQuery(f, numberToReturn, numberToSkip)):
+    if f.collection.client.sock.trySend(prepareQuery(f, f.collection.client.nextRequestId(), numberToReturn, numberToSkip)):
       var data: string = newStringOfCap(4)
       var received: int = f.collection.client.sock.recv(data, 4)
       var stream: Stream = newStringStream(data)
@@ -312,9 +314,7 @@ iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int3
       else:
         discard
 
-proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32, lockedSocket: AsyncLockedSocket = nil): Future[seq[Bson]] {.async.} =
-  ## Perform asynchronous OP_QUERY operation to MongoDB.
-
+proc handleResponses(ls: AsyncLockedSocket): Future[void] {.async.} =
   # Template for disconnection handling
   template handleDisconnect(response: string, sock: AsyncLockedSocket) =
     if response == "":
@@ -322,47 +322,60 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32
       ls.inuse = false
       raise newException(CommunicationError, "Disconnected from MongoDB server")
 
+  while ls.queue.len > 0:
+    var data: string = await ls.sock.recv(4)
+    handleDisconnect(data, ls)
+
+    var stream: Stream = newStringStream(data)
+    let messageLength: int32 = stream.readInt32() - 4
+
+    ## Read data
+    data = ""
+    while data.len < messageLength:
+      let chunk: string = await ls.sock.recv(messageLength - data.len)
+      handleDisconnect(chunk, ls)
+      data &= chunk
+
+    stream = newStringStream(data)
+
+    discard stream.readInt32()                     ## requestID
+    let responseTo = stream.readInt32()            ## responseTo
+    discard stream.readInt32()                     ## opCode
+    discard stream.readInt32()                     ## responseFlags
+    discard stream.readInt64()                     ## cursorID
+    discard stream.readInt32()                     ## startingFrom
+    let numberReturned: int32 = stream.readInt32() ## numberReturned
+
+    var res: seq[Bson] = @[]
+
+    if numberReturned > 0:
+      for i in 0..<numberReturned:
+        res.add(newBsonDocument(stream))
+
+    let fut = ls.queue[responseTo]
+    ls.queue.del responseTo
+    fut.complete(res)
+
+
+proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32, lockedSocket: AsyncLockedSocket = nil): Future[seq[Bson]] {.async.} =
+  ## Perform asynchronous OP_QUERY operation to MongoDB.
+
   ## Private procedure for performing actual query to Mongo via async client
   var ls = lockedSocket
   if ls.isNil:
     ls = await f.collection.client.next()
 
-  await ls.sock.send(prepareQuery(f, numberToReturn, numberToSkip))
-
-  # Read reply length
-  var data: string = await ls.sock.recv(4)
-  handleDisconnect(data, ls)
-
-  var stream: Stream = newStringStream(data)
-  let messageLength: int32 = stream.readInt32() - 4
-
-  ## Read data
-  data = ""
-  while data.len < messageLength:
-    let chunk: string = await ls.sock.recv(messageLength - data.len)
-    handleDisconnect(chunk, ls)
-    data &= chunk
-
+  let requestId = f.collection.client.nextRequestId()
+  await ls.sock.send(prepareQuery(f, requestId, numberToReturn, numberToSkip))
   ls.inuse = false
-
-  stream = newStringStream(data)
-
-  discard stream.readInt32()                     ## requestId
-  discard stream.readInt32()                     ## responseTo
-  discard stream.readInt32()                     ## opCode
-  discard stream.readInt32()                     ## responseFlags
-  discard stream.readInt64()                     ## cursorID
-  discard stream.readInt32()                     ## startingFrom
-  let numberReturned: int32 = stream.readInt32() ## numberReturned
-
-  result = @[]
-
-  if numberReturned > 0:
-    for i in 0..<numberReturned:
-      result.add(newBsonDocument(stream))
-    return
-  elif numberToReturn == 1:
+  let response = newFuture[seq[Bson]]("recv")
+  ls.queue[requestId] = response
+  if ls.queue.len == 1:
+    asyncCheck handleResponses(ls)
+  result = await response
+  if result.len == 0 and numberToReturn == 1:
     raise newException(NotFound, "No documents matching query were found")
+
 
 proc all*(f: Cursor[Mongo]): seq[Bson] =
   ## Perform MongoDB query and return all matching documents
@@ -647,6 +660,40 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
   let response = await c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply
 
+# ==================== #
+# Find and modify API  #
+# ==================== #
+
+proc findAndModify*(c: Collection[Mongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
+  ## Finds and modifies MongoDB document
+  let request = %*{
+    "findAndModify": c.name,
+    "query": selector,
+    "update": update,
+    "new": afterUpdate,
+    "upsert": upsert,
+    "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+  }
+  if not sort.isNil:
+    request["sort"] = sort
+  let response = c.db["$cmd"].makeQuery(request).one()
+  return response.toStatusReply
+
+proc findAndModify*(c: Collection[AsyncMongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
+  ## Finds and modifies MongoDB document via async connection
+  let request = %*{
+    "findAndModify": c.name,
+    "query": selector,
+    "update": update,
+    "new": afterUpdate,
+    "upsert": upsert,
+    "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+  }
+  if not sort.isNil:
+    request["sort"] = sort
+  let response = await c.db["$cmd"].makeQuery(request).one()
+  return response.toStatusReply
+
 # ============ #
 # Remove API   #
 # ============ #
@@ -760,7 +807,7 @@ proc authenticateScramSha1(db: Database[Mongo], username: string, password: stri
   if responseContinue1["ok"].toFloat64() == 0.0:
     db.client.authenticated = false
     return false
-  
+
   if not scramClient.verifyServerFinalMessage(binstr(responseContinue1["payload"])):
       raise newException(Exception, "Server returned an invalid signature.")
 
@@ -865,9 +912,9 @@ proc newMongoDatabase*(u: string): Database[Mongo] =
   ## Create new Mongo sync client using URI as string
   return newMongoDatabase(parseUri(u))
 
-proc newAsyncMongoDatabase*(u: Uri): Future[Database[AsyncMongo]] {.async.} =
+proc newAsyncMongoDatabase*(u: Uri, maxConnections = 16): Future[Database[AsyncMongo]] {.async.} =
   ## Create new AsyncMongo client using URI as string
-  let client = newAsyncMongoWithURI(u)
+  let client = newAsyncMongoWithURI(u, maxConnections)
   if await client.connect():
     result.new()
     result.name = u.path.extractFileName()
@@ -880,4 +927,4 @@ proc newAsyncMongoDatabase*(u: Uri): Future[Database[AsyncMongo]] {.async.} =
     let authRes = await all(authenticated)
     client.authenticated = authRes.any() do(x: bool) -> bool: x
 
-proc newAsyncMongoDatabase*(u: string): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u))
+proc newAsyncMongoDatabase*(u: string, maxConnections = 16): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u), maxConnections)
