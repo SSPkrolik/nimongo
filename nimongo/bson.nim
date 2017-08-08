@@ -578,28 +578,6 @@ proc timeUTC*(time: Time): Bson =
     valueTime: time
   )
 
-proc `()`*(bs: Bson, key: string, val: Bson): Bson {.discardable, deprecated.} =
-  ## Add field to bson object
-  result = bs
-  if bs.kind == BsonKindDocument:
-      if not isNil(val):
-          result.valueDocument[key] = val
-      else:
-          result.valueDocument[key] = null()
-  else:
-      raiseWrongNodeException(bs)
-
-proc `()`*[T](bs: Bson, key: string, values: seq[T]): Bson {.discardable, deprecated.} =
-    ## Add array field to bson object
-    result = bs
-
-    var arr: Bson = newBsonArray()
-
-    for val in values:
-        arr.valueArray.add(val)
-
-    result.valueDocument[key] = arr
-
 proc len*(bs: Bson):int =
     if bs.kind == BsonKindArray:
         result = bs.valueArray.len
