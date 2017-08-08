@@ -373,9 +373,6 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32
   if ls.queue.len == 1:
     asyncCheck handleResponses(ls)
   result = await response
-  if result.len == 0 and numberToReturn == 1:
-    raise newException(NotFound, "No documents matching query were found")
-
 
 proc all*(f: Cursor[Mongo]): seq[Bson] =
   ## Perform MongoDB query and return all matching documents
@@ -395,11 +392,22 @@ proc one*(f: Cursor[Mongo]): Bson =
 proc one*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
   ## Perform MongoDB query asynchronously and return first matching document.
   let docs = await f.performFindAsync(1, f.nskip)
+  if docs.len == 0:
+    raise newException(NotFound, "No documents matching query were found")
   return docs[0]
+
+proc oneOrNone*(f: Cursor[AsyncMongo]): Future[Bson] {.async.} =
+  ## Perform MongoDB query asynchronously and return first matching document or
+  ## nil if not found.
+  let docs = await f.performFindAsync(1, f.nskip)
+  if docs.len > 0:
+    result = docs[0]
 
 proc one(f: Cursor[AsyncMongo], ls: AsyncLockedSocket): Future[Bson] {.async.} =
   # Internal proc used for sending authentication requests on particular socket
   let docs = await f.performFindAsync(1, f.nskip, ls)
+  if docs.len == 0:
+    raise newException(NotFound, "No documents matching query were found")
   return docs[0]
 
 iterator items*(f: Cursor): Bson =
