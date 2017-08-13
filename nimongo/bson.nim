@@ -654,86 +654,103 @@ converter seqCharToString(x: openarray[char]): string =
     result = newStringOfCap(len(x))
     for c in x: result = result & c
 
-proc newBsonDocument*(stream: Stream): Bson =
-    ## Create new Bson document from byte stream
-    discard stream.readInt32()   ## docSize
+proc readStr(s: Stream, length: int, result: var string) =
+    result.setLen(length)
+    var L = readData(s, addr(result[0]), length)
+    if L != length: setLen(result, L)
 
-    proc parseBson(s: Stream, doc: Bson) =
+proc newBsonDocument*(s: Stream): Bson =
+    ## Create new Bson document from byte stream
+    var buf = ""
+    discard s.readInt32()   ## docSize
+    result = newBsonDocument()
+    var docStack = @[result]
+    while docStack.len != 0:
         let kind: BsonKind = s.readChar()
-        var name: TaintedString = ""
-        discard s.readLine(name)
+        if kind == BsonKindUnknown:
+            docStack.setLen(docStack.len - 1) # End of doc. pop stack.
+            continue
+
+        let doc = docStack[^1]
+
+        discard s.readLine(buf)
+        var sub: ptr Bson
+        case doc.kind
+        of BsonKindDocument:
+            sub = addr doc.valueDocument.mgetOrPut(buf, nil)
+        of BsonKindArray:
+            doc.valueArray.add(nil)
+            sub = addr doc.valueArray[^1]
+        else:
+            assert(false, "Internal error")
+
         case kind:
         of BsonKindDouble:
-            doc[name.string] = s.readFloat64().toBson()
+            sub[] = s.readFloat64().toBson()
         of BsonKindStringUTF8:
-            let valueString: string = s.readStr(s.readInt32() - 1)
+            s.readStr(s.readInt32() - 1, buf)
             discard s.readChar()
-            doc[name.string] = valueString.toBson()
+            sub[] = buf.toBson()
         of BsonKindDocument:
-            var subdoc = newBsonDocument(s)
-            doc[name] = subdoc
+            discard s.readInt32()   ## docSize
+            let subdoc = newBsonDocument()
+            sub[] = subdoc
+            docStack.add(subdoc)
         of BsonKindArray:
-            var subdoc = newBsonDocument(s)
-            var subarr = newBsonArray()
-            subarr.valueArray = @[]
-            for k, v in subdoc.valueDocument: subarr.valueArray.add(v)
-            doc[name.string] = subarr
+            discard s.readInt32()   ## docSize
+            let subarr = newBsonArray()
+            sub[] = subarr
+            docStack.add(subarr)
         of BsonKindBinary:
             let
                 ds: int32 = s.readInt32()
                 st: BsonSubtype = s.readChar().BsonSubtype
+            s.readStr(ds, buf)
             case st:
             of BsonSubtypeMd5:
-                doc[name.string] = (cast[ptr MD5Digest](s.readStr(ds).cstring)[]).toBson()
+                sub[] = cast[ptr MD5Digest](buf.cstring)[].toBson()
             of BsonSubtypeGeneric:
-                doc[name.string] = bin(s.readStr(ds))
+                sub[] = bin(buf)
             of BsonSubtype.BsonSubtypeUserDefined:
-                doc[name.string] = binuser(s.readStr(ds))
+                sub[] = binuser(buf)
             else:
                 raise newException(Exception, "Unexpected subtype: " & $st)
         of BsonKindUndefined:
-            doc[name.string] = undefined()
+            sub[] = undefined()
         of BsonKindOid:
-            let valueOid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
-            doc[name.string] = valueOid.toBson()
+            s.readStr(12, buf)
+            sub[] = cast[ptr Oid](buf.cstring)[].toBson()
         of BsonKindBool:
-            doc[name.string] = if s.readChar() == 0.char: false.toBson() else: true.toBson()
+            sub[] = if s.readChar() == 0.char: false.toBson() else: true.toBson()
         of BsonKindTimeUTC:
             let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
-            doc[name.string] = timeUTC
+            sub[] = timeUTC
         of BsonKindNull:
-            doc[name.string] = null()
+            sub[] = null()
         of BsonKindRegexp:
-            doc[name.string] = regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
+            sub[] = regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
         of BsonKindDBPointer:
             let
               refcol: string = s.readStr(s.readInt32() - 1)
               refoid: Oid = cast[ptr Oid](s.readStr(12).cstring)[]
             discard s.readChar()
-            doc[name.string] = dbref(refcol, refoid)
+            sub[] = dbref(refcol, refoid)
         of BsonKindJSCode:
-            let
-              code: string = s.readStr(s.readInt32() - 1)
+            s.readStr(s.readInt32() - 1, buf)
             discard s.readChar()
-            doc[name.string] = js(code)
+            sub[] = js(buf)
         of BsonKindInt32:
-            doc[name.string] = s.readInt32().toBson()
+            sub[] = s.readInt32().toBson()
         of BsonKindTimestamp:
-            doc[name.string] = cast[BsonTimestamp](s.readInt64()).toBson()
+            sub[] = cast[BsonTimestamp](s.readInt64()).toBson()
         of BsonKindInt64:
-            doc[name.string] = s.readInt64().toBson()
+            sub[] = s.readInt64().toBson()
         of BsonKindMinimumKey:
-            doc[name.string] = minkey()
+            sub[] = minkey()
         of BsonKindMaximumKey:
-            doc[name.string] = maxkey()
+            sub[] = maxkey()
         else:
             raise newException(Exception, "Unexpected kind: " & $kind)
-
-    result = newBsonDocument()
-
-    while stream.peekChar() != 0.char:
-        parseBson(stream, result)
-    discard stream.readChar()
 
 proc initBsonDocument*(stream: Stream): Bson {.deprecated.} =
     return newBsonDocument(stream)
