@@ -705,7 +705,10 @@ proc newBsonDocument*(s: Stream): Bson =
             let
                 ds: int32 = s.readInt32()
                 st: BsonSubtype = s.readChar().BsonSubtype
-            s.readStr(ds, buf)
+            if ds > 0:
+                s.readStr(ds, buf)
+            else:
+                buf = ""
             case st:
             of BsonSubtypeMd5:
                 sub[] = cast[ptr MD5Digest](buf.cstring)[].toBson()
