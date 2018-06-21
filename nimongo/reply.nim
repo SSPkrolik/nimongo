@@ -5,6 +5,7 @@ type StatusReply* = object  ## Database Reply
     ok*: bool
     n*: int
     err*: string
+    inserted_ids*: seq[Bson]
     bson*: Bson
 
 template parseReplyField(b: untyped, field: untyped, default: untyped, body: untyped): untyped =
@@ -47,14 +48,16 @@ proc parseReplyErrmsg(reply: Bson, isRequired: bool): string {.raises: [ReplyFie
     else:
       result = ""
 
-proc toStatusReply*(reply: Bson): StatusReply =
-  ## Create StatusReply object from database reply BSON document.
+proc toStatusReply*(reply: Bson, inserted_ids: seq[Bson] = @[]): StatusReply =
+  ## Create StatusReply object from database reply BSON document and
+  ## an optional list of OIDs.
   ## "ok" field is considered required. "n" and "errmsg" fields
   ## are optional and they are parsed if exist in reply
   result.bson = reply
   result.ok = parseReplyOk(reply, true)
   result.n = parseReplyN(reply, false)
   result.err = parseReplyErrmsg(reply, false)
+  result.inserted_ids = inserted_ids
 
 proc isReplyOk*(reply: Bson): bool =
   ## This function is useful if we would like to check only "ok" field
