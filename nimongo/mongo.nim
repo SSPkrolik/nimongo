@@ -611,6 +611,20 @@ proc getLastError*(am: AsyncMongo): Future[StatusReply] {.async.} =
 
 proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Insert several new documents into MongoDB using one request
+
+  # 
+  # insert any missing _id fields
+  #
+  var inserted_ids: seq[Bson] = @[]
+  var id = ""
+  for doc in documents:
+    if not doc.contains("_id"):
+      doc["_id"] = toBson(genOid())
+    inserted_ids.add(doc["_id"])
+
+  #
+  # build & send Mongo query
+  #
   let
     request = %*{
       "insert": c.name,
@@ -620,7 +634,7 @@ proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, w
     }
     response = c.db["$cmd"].makeQuery(request).one()
 
-  return response.toStatusReply
+  return response.toStatusReply(inserted_ids=inserted_ids)
 
 proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Insert new document into MongoDB via sync connection
@@ -628,6 +642,20 @@ proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeCo
 
 proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new documents into MongoDB via async connection
+
+  # 
+  # insert any missing _id fields
+  #
+  var inserted_ids: seq[Bson] = @[]
+  var id = ""
+  for doc in documents:
+    if not doc.contains("_id"):
+      doc["_id"] = toBson(genOid())
+    inserted_ids.add(doc["_id"])
+
+  #
+  # build & send Mongo query
+  #
   let
     request = %*{
       "insert": c.name,
@@ -637,7 +665,7 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = tr
     }
     response = await c.db["$cmd"].makeQuery(request).one()
 
-  return response.toStatusReply
+  return response.toStatusReply(inserted_ids=inserted_ids)
 
 proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new document into MongoDB via async connection
