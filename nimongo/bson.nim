@@ -430,7 +430,7 @@ proc initBsonArray*(): Bson {.deprecated.} =
     ## Create new Bson array
     return newBsonArray()
 
-template B*: expr =
+template B*: untyped =
     newBsonDocument()
 
 proc `[]`*(bs: Bson, key: string): Bson =
@@ -495,7 +495,7 @@ proc toBson(x: NimNode): NimNode {.compileTime.} =
   else:
     result = newCall("toBson", x)
 
-macro `%*`*(x: expr): Bson =
+macro `%*`*(x: untyped): Bson =
     ## Perform dict-like structure conversion into bson
     result = toBson(x)
 
