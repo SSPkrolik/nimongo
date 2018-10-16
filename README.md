@@ -6,7 +6,7 @@ with MongoDB using Nim programming language without any other dependencies.
 
 You can find a table of supported features at the bottom of the document.
 
-`nimongo` is tested on MongoDB `3.x.x` and `4.0.x` versions with GCC and MSVS2017 compiler backends.
+`nimongo` is tested on MongoDB `3.x.x` and `4.0.x` versions with GCC and MSVS2017 compiler backends and the latest stable version of Nim (0.19.0).
 
 Installation
 ------------
