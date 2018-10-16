@@ -1,4 +1,4 @@
-nimongo - Pure Nim MongoDB Driver [![Build Status](https://travis-ci.org/SSPkrolik/nimongo.svg?branch=master)](https://travis-ci.org/SSPkrolik/nimongo)
+nimongo - Pure Nim MongoDB Driver [![Build Status](https://travis-ci.org/SSPkrolik/nimongo.svg?branch=master)](https://travis-ci.org/SSPkrolik/nimongo) [![nimble](https://raw.githubusercontent.com/yglukhov/nimble-tag/master/nimble.png)](https://github.com/yglukhov/nimble-tag)
 ===================================
 
 `nimongo` has a main intention to provide developer-friendly way to interact
@@ -22,10 +22,6 @@ or directly from Git repo:
 ```bash
 $ nimble install https://github.com/SSPkrolik/nimongo.git
 ```
-
-> WARNING! Current `master` version of `nimongo` is tested only with the
-> latest version of Nim from git repo: `devel` branch.
-> Also nimongo is intended to support MongoDB versions >= 3.0.
 
 Current status (briefly)
 ------------------------
