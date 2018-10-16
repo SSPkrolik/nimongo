@@ -14,7 +14,7 @@ template parseReplyField(b: untyped, field: untyped, default: untyped, body: unt
   ## than apply provided default value. If field exists than apply provided
   ## calculations body code.
   let b = reply[field]
-  if b == nil:
+  if b == nil.Bson:
     if isRequired:
       raise newException(ReplyFieldMissing, "Required field \"" & field & "\" missing in reply")
     else:

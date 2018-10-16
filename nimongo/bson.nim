@@ -13,37 +13,41 @@ import timeit
 
 # ------------- type: BsonKind -------------------#
 
-type BsonKind* = enum
-    BsonKindUnknown         = 0x00.char  ##
-    BsonKindDouble          = 0x01.char  ## 64-bit floating-point
-    BsonKindStringUTF8      = 0x02.char  ## UTF-8 encoded C string
-    BsonKindDocument        = 0x03.char  ## Embedded document
-    BsonKindArray           = 0x04.char  ## Embedded array of Bson values
-    BsonKindBinary          = 0x05.char  ## Generic binary data
-    BsonKindUndefined       = 0x06.char  ## Some undefined value (deprecated)
-    BsonKindOid             = 0x07.char  ## Mongo Object ID
-    BsonKindBool            = 0x08.char  ## boolean value
-    BsonKindTimeUTC         = 0x09.char  ## int64 milliseconds (Unix epoch time)
-    BsonKindNull            = 0x0A.char  ## nil value stored in Mongo
-    BsonKindRegexp          = 0x0B.char  ## Regular expression and options
-    BsonKindDBPointer       = 0x0C.char  ## Pointer to 'db.col._id'
-    BsonKindJSCode          = 0x0D.char  ## -
-    BsonKindDeprecated      = 0x0E.char  ## -
-    BsonKindJSCodeWithScope = 0x0F.char  ## -
-    BsonKindInt32           = 0x10.char  ## 32-bit integer number
-    BsonKindTimestamp       = 0x11.char  ## -
-    BsonKindInt64           = 0x12.char  ## 64-bit integer number
-    BsonKindMaximumKey      = 0x7F.char  ## Maximum MongoDB comparable value
-    BsonKindMinimumKey      = 0xFF.char  ## Minimum MongoDB comparable value
+type BsonKind* = char
 
-type BsonSubtype* = enum
-    BsonSubtypeGeneric      = 0x00.char  ##
-    BsonSubtypeFunction     = 0x01.char  ##
-    BsonSubtypeBinaryOld    = 0x02.char  ##
-    BsonSubtypeUuidOld      = 0x03.char  ##
-    BsonSubtypeUuid         = 0x04.char  ##
-    BsonSubtypeMd5          = 0x05.char  ##
-    BsonSubtypeUserDefined  = 0x80.char  ##
+const
+    BsonKindUnknown*         = 0x00.BsonKind  ##
+    BsonKindDouble*          = 0x01.BsonKind  ## 64-bit floating-point
+    BsonKindStringUTF8*      = 0x02.BsonKind  ## UTF-8 encoded C string
+    BsonKindDocument*        = 0x03.BsonKind  ## Embedded document
+    BsonKindArray*           = 0x04.BsonKind  ## Embedded array of Bson values
+    BsonKindBinary*          = 0x05.BsonKind  ## Generic binary data
+    BsonKindUndefined*       = 0x06.BsonKind  ## Some undefined value (deprecated)
+    BsonKindOid*             = 0x07.BsonKind  ## Mongo Object ID
+    BsonKindBool*            = 0x08.BsonKind  ## boolean value
+    BsonKindTimeUTC*         = 0x09.BsonKind  ## int64 milliseconds (Unix epoch time)
+    BsonKindNull*            = 0x0A.BsonKind  ## nil value stored in Mongo
+    BsonKindRegexp*          = 0x0B.BsonKind  ## Regular expression and options
+    BsonKindDBPointer*       = 0x0C.BsonKind  ## Pointer to 'db.col._id'
+    BsonKindJSCode*          = 0x0D.BsonKind  ## -
+    BsonKindDeprecated*      = 0x0E.BsonKind  ## -
+    BsonKindJSCodeWithScope* = 0x0F.BsonKind  ## -
+    BsonKindInt32*           = 0x10.BsonKind  ## 32-bit integer number
+    BsonKindTimestamp*       = 0x11.BsonKind  ## -
+    BsonKindInt64*           = 0x12.BsonKind  ## 64-bit integer number
+    BsonKindMaximumKey*      = 0x7F.BsonKind  ## Maximum MongoDB comparable value
+    BsonKindMinimumKey*      = 0xFF.BsonKind  ## Minimum MongoDB comparable value
+
+type BsonSubtype* = char
+
+const
+    BsonSubtypeGeneric*      = 0x00.BsonSubtype  ##
+    BsonSubtypeFunction*     = 0x01.BsonSubtype  ##
+    BsonSubtypeBinaryOld*    = 0x02.BsonSubtype  ##
+    BsonSubtypeUuidOld*      = 0x03.BsonSubtype  ##
+    BsonSubtypeUuid*         = 0x04.BsonSubtype  ##
+    BsonSubtypeMd5*          = 0x05.BsonSubtype  ##
+    BsonSubtypeUserDefined*  = 0x80.BsonSubtype  ##
 
 converter toChar*(bk: BsonKind): char =
     ## Convert BsonKind to char
@@ -124,18 +128,13 @@ converter toFloat64*(x: Bson): float64 =
 
 proc toBson*(x: string): Bson =
     ## Convert string to Bson object
-    if x == nil:
-        return Bson(kind: BsonKindNull)
-    else:
-        return Bson(kind: BsonKindStringUTF8, valueString: x)
+    return Bson(kind: BsonKindStringUTF8, valueString: x)
 
 converter toString*(x: Bson): string =
     ## Convert Bson to UTF8 string
     case x.kind
     of BsonKindStringUTF8:
         return x.valueString
-    of BsonKindNull:
-        return nil
     else:
         raiseWrongNodeException(x)
 
@@ -199,7 +198,7 @@ converter toTime*(x: Bson): Time =
 
 proc toBson*(x: BsonTimestamp): Bson =
     ## Convert inner BsonTimestamp to Bson object
-    return Bson(kind: BsonKind.BsonKindTimestamp, valueTimestamp: x)
+    return Bson(kind: BsonKindTimestamp, valueTimestamp: x)
 
 converter toTimestamp*(x: Bson): BsonTimestamp =
     ## Convert Bson object to inner BsonTimestamp type
@@ -300,7 +299,7 @@ proc toBytes*(bs: Bson, res: var string) =
     of BsonKindBool:
         boolToBytes(bs.valueBool, res)
     of BsonKindTimeUTC:
-        int64ToBytes(int64(bs.valueTime.toSeconds() * 1000), res)
+        int64ToBytes(int64(bs.valueTime.toUnix() * 1000), res)
     of BsonKindNull:
         discard
     of BsonKindRegexp:
@@ -477,13 +476,13 @@ proc toBson(x: NimNode): NimNode {.compileTime.} =
 
   of nnkBracket:
     result = newNimNode(nnkBracket)
-    for i in 0 .. <x.len():
+    for i in 0 ..< x.len():
         result.add(toBson(x[i]))
     result = newCall("toBson", result)
 
   of nnkTableConstr:
     result = newNimNode(nnkTableConstr)
-    for i in 0 .. <x.len():
+    for i in 0 ..< x.len():
         x[i].expectKind(nnkExprColonExpr)
         result.add(newNimNode(nnkExprColonExpr).add(x[i][0]).add(toBson(x[i][1])))
     result = newCall("toBson", result)
@@ -560,7 +559,7 @@ proc binuser*(bindata: string): Bson =
     ## Create new binray Bson object with 'user-defined' subtype
     return Bson(
         kind: BsonKindBinary,
-        subtype: BsonSubtype.BsonSubtypeUserDefined,
+        subtype: BsonSubtypeUserDefined,
         valueUserDefined: bindata
     )
 
@@ -649,11 +648,6 @@ proc contains*(bs: Bson, key: string): bool =
   else:
     return false
 
-converter seqCharToString(x: openarray[char]): string =
-    ## Converts sequence of chars to string
-    result = newStringOfCap(len(x))
-    for c in x: result = result & c
-
 proc readStr(s: Stream, length: int, result: var string) =
     result.setLen(length)
     var L = readData(s, addr(result[0]), length)
@@ -714,10 +708,12 @@ proc newBsonDocument*(s: Stream): Bson =
                 sub[] = cast[ptr MD5Digest](buf.cstring)[].toBson()
             of BsonSubtypeGeneric:
                 sub[] = bin(buf)
-            of BsonSubtype.BsonSubtypeUserDefined:
+            of BsonSubtypeUserDefined:
                 sub[] = binuser(buf)
+            of BsonSubtypeUuid:
+                sub[] = bin(buf)
             else:
-                raise newException(Exception, "Unexpected subtype: " & $st)
+                raise newException(Exception, "Unexpected subtype: " & $(st.int))
         of BsonKindUndefined:
             sub[] = undefined()
         of BsonKindOid:
@@ -726,12 +722,13 @@ proc newBsonDocument*(s: Stream): Bson =
         of BsonKindBool:
             sub[] = if s.readChar() == 0.char: false.toBson() else: true.toBson()
         of BsonKindTimeUTC:
-            let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromSeconds(s.readInt64().float64 / 1000))
+            let timeUTC: Bson = Bson(kind: BsonKindTimeUTC, valueTime: fromUnix((s.readInt64().float64 / 1000).int64))
             sub[] = timeUTC
         of BsonKindNull:
             sub[] = null()
         of BsonKindRegexp:
-            sub[] = regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
+            # sub[] = regex(s.readLine().string(), seqCharToString(sorted(s.readLine().string, system.cmp)))
+            sub[] = regex(s.readLine().string(), s.readLine().string)
         of BsonKindDBPointer:
             let
               refcol: string = s.readStr(s.readInt32() - 1)

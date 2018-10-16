@@ -8,3 +8,7 @@ nimongotest
 profile_results.txt
 *.save
 Contribute.md
+*.ilk
+*.pdb
+*.exe
+*.cfg

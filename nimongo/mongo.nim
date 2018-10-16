@@ -630,7 +630,7 @@ proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, w
       "insert": c.name,
       "documents": documents,
       "ordered": ordered,
-      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+      "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
     }
     response = c.db["$cmd"].makeQuery(request).one()
 
@@ -638,7 +638,7 @@ proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, w
 
 proc insert*(c: Collection[Mongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): StatusReply {.discardable.} =
   ## Insert new document into MongoDB via sync connection
-  return c.insert(@[document], ordered, if writeConcern == nil: c.client.writeConcern else: writeConcern)
+  return c.insert(@[document], ordered, if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern)
 
 proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new documents into MongoDB via async connection
@@ -661,7 +661,7 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = tr
       "insert": c.name,
       "documents": documents,
       "ordered": ordered,
-      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+      "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
     }
     response = await c.db["$cmd"].makeQuery(request).one()
 
@@ -669,7 +669,7 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = tr
 
 proc insert*(c: Collection[AsyncMongo], document: Bson, ordered: bool = true, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
   ## Insert new document into MongoDB via async connection
-  result = await c.insert(@[document], ordered, if writeConcern == nil: c.client.writeConcern else: writeConcern)
+  result = await c.insert(@[document], ordered, if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern)
 
 # =========== #
 # Update API  #
@@ -708,7 +708,7 @@ proc findAndModify*(c: Collection[Mongo], selector: Bson, sort: Bson, update: Bs
     "update": update,
     "new": afterUpdate,
     "upsert": upsert,
-    "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+    "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
   }
   if not sort.isNil:
     request["sort"] = sort
@@ -723,7 +723,7 @@ proc findAndModify*(c: Collection[AsyncMongo], selector: Bson, sort: Bson, updat
     "update": update,
     "new": afterUpdate,
     "upsert": upsert,
-    "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+    "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
   }
   if not sort.isNil:
     request["sort"] = sort
@@ -741,7 +741,7 @@ proc remove*(c: Collection[Mongo], selector: Bson, limit: int = 0, ordered: bool
       "delete": c.name,
       "deletes": [%*{"q": selector, "limit": limit}],
       "ordered": true,
-      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+      "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
     }
     response = c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply
@@ -753,7 +753,7 @@ proc remove*(c: Collection[AsyncMongo], selector: Bson, limit: int = 0, ordered:
       "delete": c.name,
       "deletes": [%*{"q": selector, "limit": limit}],
       "ordered": true,
-      "writeConcern": if writeConcern == nil: c.client.writeConcern else: writeConcern
+      "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
     }
     response = await c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply

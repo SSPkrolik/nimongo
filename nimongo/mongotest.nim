@@ -236,10 +236,14 @@ suite "Mongo client operations test suite":
   test "[ASYNC] [SYNC] Update multiple documents":
     let
       selector = %*{"integer": 100'i32}
+      doc1 = %*{"integer": 100'i32}
+      doc2 = %*{"integer": 100'i32}
+      doc3 = %*{"integer": 100'i32}
+      doc4 = %*{"integer": 100'i32}
       updater  = %*{"$set": {"integer": 200'i32}}
 
-    check(sco.insert(@[selector, selector]))
-    check(waitFor(aco.insert(@[selector, selector])))
+    check(sco.insert(@[doc1, doc2]))
+    check(waitFor(aco.insert(@[doc3, doc4])))
 
     check(sco.update(selector, updater, true, false))
     check(waitFor(aco.update(selector, updater, true, false)))
