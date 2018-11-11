@@ -108,7 +108,7 @@ type
   GeoPoint = array[0..1, float64]   ## Represents Mongo Geo Point
 
 proc raiseWrongNodeException(bs: Bson) =
-    raise newException(Exception, "Wrong node kind: " & $bs.kind)
+    raise newException(Exception, "Wrong node kind: " & $ord(bs.kind))
 
 proc toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
@@ -650,8 +650,9 @@ proc contains*(bs: Bson, key: string): bool =
 
 proc readStr(s: Stream, length: int, result: var string) =
     result.setLen(length)
-    var L = readData(s, addr(result[0]), length)
-    if L != length: setLen(result, L)
+    if length != 0:
+      var L = readData(s, addr(result[0]), length)
+      if L != length: setLen(result, L)
 
 proc newBsonDocument*(s: Stream): Bson =
     ## Create new Bson document from byte stream
