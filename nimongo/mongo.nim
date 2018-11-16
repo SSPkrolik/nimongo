@@ -375,7 +375,6 @@ proc performFindAsync(f: Cursor[AsyncMongo], numberToReturn, numberToSkip: int32
 
 proc all*(f: Cursor[Mongo]): seq[Bson] =
   ## Perform MongoDB query and return all matching documents
-  result = @[]
   for doc in f.performFind(f.nlimit, f.nskip):
     result.add(doc)
 
@@ -427,7 +426,6 @@ proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
 proc listDatabases*(sm: Mongo): seq[string] =
   ## Return list of databases on the server
   let response = sm["admin"]["$cmd"].makeQuery(%*{"listDatabases": 1}).one()
-  result = @[]
   if response.isReplyOk:
     for db in response["databases"].items():
       result.add(db["name"].toString())
@@ -435,7 +433,6 @@ proc listDatabases*(sm: Mongo): seq[string] =
 proc listDatabases*(am: AsyncMongo): Future[seq[string]] {.async.} =
   ## Return list of databases on the server via async client
   let response = await am["admin"]["$cmd"].makeQuery(%*{"listDatabases": 1}).one()
-  result = @[]
   if response.isReplyOk:
     for db in response["databases"].items():
       result.add(db["name"].toString())
@@ -467,7 +464,6 @@ proc createCollection*(db: Database[AsyncMongo], name: string, capped: bool = fa
 proc listCollections*(db: Database[Mongo], filter: Bson = %*{}): seq[string] =
   ## List collections inside specified database
   let response = db["$cmd"].makeQuery(%*{"listCollections": 1'i32}).one()
-  result = @[]
   if response.isReplyOk:
     for col in response["cursor"]["firstBatch"]:
       result.add(col["name"])
@@ -477,7 +473,6 @@ proc listCollections*(db: Database[AsyncMongo], filter: Bson = %*{}): Future[seq
   let
     request = %*{"listCollections": 1'i32}
     response = await db["$cmd"].makeQuery(request).one()
-  result = @[]
   if response.isReplyOk:
     for col in response["cursor"]["firstBatch"]:
       result.add(col["name"])
@@ -572,7 +567,6 @@ proc unique*(f: Cursor[Mongo], key: string): seq[string] =
     }
     response = f.collection.db["$cmd"].makeQuery(request).one()
 
-  result = @[]
   if response.isReplyOk:
     for item in response["values"].items():
       result.add(item.toString())
@@ -589,7 +583,6 @@ proc unique*(f: Cursor[AsyncMongo], key: string): Future[seq[string]] {.async.} 
     }
     response = await f.collection.db["$cmd"].makeQuery(request).one()
 
-  result = @[]
   if response.isReplyOk:
     for item in response["values"].items():
       result.add(item.toString())
