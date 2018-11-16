@@ -5,7 +5,7 @@ license     = "MIT"
 author      = "Rostyslav Dzinko <rostislav.dzinko@gmail.com>"
 
 # Dependencies
-requires "scram >= 0.1.2"
+requires "scram >= 0.1.7"
 
 task test, "tests":
   exec "nim c -r tests/nimongotest.nim"
