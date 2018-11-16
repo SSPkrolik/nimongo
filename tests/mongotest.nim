@@ -4,8 +4,10 @@ import strutils
 import times
 import unittest
 
-import bson
-import mongo
+import nimongo/bson
+import nimongo/mongo
+
+# TODO: unused
 import timeit
 
 const

@@ -1,7 +1,7 @@
 ## Tests for bson.nim module
 import unittest
 
-import bson
+import nimongo/bson
 
 suite "BSON serializer/deserializer test suite":
 

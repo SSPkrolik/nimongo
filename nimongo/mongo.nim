@@ -20,7 +20,6 @@ import uri
 import os
 
 import bson except `()`
-import timeit
 
 import scram/client
 
