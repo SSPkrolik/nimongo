@@ -413,6 +413,18 @@ iterator items*(f: Cursor): Bson =
   for doc in f.performFind(f.nlimit, f.nskip):
       yield doc
 
+iterator itemsForceSync*(f: Cursor[AsyncMongo]): Bson =
+  var count = 0'i32
+  var limit = f.nlimit
+  if limit == 0: # pending https://github.com/SSPkrolik/nimongo/issues/64
+    limit = type(f.nlimit).high
+  while count < limit:
+    let docs = waitFor f.performFindAsync(1, f.nskip + count)
+    if docs.len == 0:
+      break
+    count.inc
+    yield docs[0]
+
 proc isMaster*(sm: Mongo): bool =
   ## Perform query in order to check if connected Mongo instance is a master
   return sm["admin"]["$cmd"].makeQuery(%*{"isMaster": 1}).one()["ismaster"]
