@@ -1,7 +1,7 @@
 ## Tests for bson.nim module
 import unittest
 
-import bson
+import nimongo/bson
 
 suite "BSON serializer/deserializer test suite":
 
@@ -29,6 +29,8 @@ suite "BSON serializer/deserializer test suite":
     }
     check(doc["double"] == 5436.5436)
     check(doc["stringkey"] == "stringvalue")
+    check doc["stringkey"] is Bson
+    check(doc["stringkey"].string == "stringvalue")
     check(doc["document"]["double"] == 5436.5436)
     check(doc["document"]["key"] == "value")
     check(doc["array"][0] == 1'i64)

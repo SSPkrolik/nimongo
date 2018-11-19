@@ -9,8 +9,6 @@ import strutils
 import times
 import tables
 
-import timeit
-
 # ------------- type: BsonKind -------------------#
 
 type BsonKind* = char
