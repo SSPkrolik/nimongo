@@ -406,15 +406,13 @@ proc `$`*(bs: Bson): string =
 
 proc initBsonDocument*(): Bson {.deprecated.}=
     ## Create new top-level Bson document
-    result.new
-    result.kind = BsonKindDocument
-    result.valueDocument = initOrderedTable[string, Bson]()
+    result = Bson(kind: BsonKindDocument,
+                  valueDocument: initOrderedTable[string, Bson]())
 
 proc newBsonDocument*(): Bson =
     ## Create new empty Bson document
-    result.new
-    result.kind = BsonKindDocument
-    result.valueDocument = initOrderedTable[string, Bson]()
+    result = Bson(kind: BsonKindDocument,
+                  valueDocument: initOrderedTable[string, Bson]())
 
 proc newBsonArray*(): Bson =
     ## Create new Bson array
