@@ -5,7 +5,7 @@ license     = "MIT"
 author      = "Rostyslav Dzinko <rostislav.dzinko@gmail.com>"
 
 # Dependencies
-requires "scram >= 0.1.7"
+requires "scram >= 0.1.9"
 
 proc runTest(input: string) =
   let cmd = "nim c -r " & input
