@@ -12,13 +12,21 @@ proc runTest(input: string) =
   echo "running: " & cmd
   exec cmd
 
+proc runTestThreaded(input: string) =
+  let cmd = "nim c --threads:on -r " & input
+  echo "running: " & cmd
+  exec cmd
+
 proc testNoMongod() =
   runTest "nimongo/bson.nim"
   runTest "tests/bsontest.nim"
+  runTestThreaded "nimongo/bson.nim"
+  runTestThreaded "tests/bsontest.nim"
 
 task test, "tests":
   testNoMongod()
   runTest "tests/nimongotest.nim"
+  runTestThreaded "tests/nimongotest.nim"
 
 task test_ci, "tests for CI":
   testNoMongod()

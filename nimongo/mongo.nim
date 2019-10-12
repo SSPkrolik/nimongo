@@ -1,11 +1,6 @@
-# Required for using _Lock on linux
-when hostOs == "linux":
-    {.passL: "-pthread".}
-
 import asyncdispatch
 import asyncnet
 import base64
-import locks
 import random
 import md5
 import net
@@ -38,9 +33,20 @@ export errors
 export reply
 export writeconcern
 
+when compileOption("threads"):
+  import locks
+
+template lockIfThreads(body: untyped): untyped =
+  when compileOption("threads"):
+    {.locks: [f.collection.client.requestLock].}:
+      body
+  else:
+    body
+
 type
   Mongo* = ref object of MongoBase      ## Mongo client object
-    requestLock:   Lock
+    when compileOption("threads"):
+      requestLock:   Lock
     sock:          Socket
     authenticated*: bool
 
@@ -284,7 +290,7 @@ proc prepareQuery(f: Cursor, requestId: int32, numberToReturn: int32, numberToSk
 
 iterator performFind(f: Cursor[Mongo], numberToReturn: int32, numberToSkip: int32): Bson {.closure.} =
   ## Private procedure for performing actual query to Mongo
-  {.locks: [f.collection.client.requestLock].}:
+  lockIfThreads:
     if f.collection.client.sock.trySend(prepareQuery(f, f.collection.client.nextRequestId(), numberToReturn, numberToSkip)):
       var data: string = newStringOfCap(4)
       var received: int = f.collection.client.sock.recv(data, 4)
