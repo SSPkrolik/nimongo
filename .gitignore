@@ -12,3 +12,6 @@ Contribute.md
 *.pdb
 *.exe
 *.cfg
+
+# ignore big blob for gridfs
+*.mkv
