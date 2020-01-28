@@ -1085,7 +1085,8 @@ proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string,
       "mime": m.getMimeType(ext),
       "exit": ext
     }
-  result = await bucket.uploadFile(f, fname & ext, chunksize = chunksize)
+  result = await bucket.uploadFile(f, fname & ext,
+    metadata = filemetadata, chunksize = chunksize)
 
 proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], f: AsyncFile,
   filename = ""): Future[bool]
