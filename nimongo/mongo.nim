@@ -13,6 +13,9 @@ import typetraits
 import times
 import uri
 import os
+import asyncfile
+import strformat
+import mimetypes
 
 import bson except `()`
 
@@ -77,6 +80,13 @@ type
     name:   string
     db:     Database[T]
     client: T
+
+  GridFS*[T] = ref object of MongoBase
+    ## GridFS is collection which namespaced to .files and .chunks
+    name*: string    # bucket name
+    files*: Collection[T]
+    chunks*: Collection[T]
+
 
   Cursor*[T] = ref object     ## MongoDB cursor: manages queries object lazily
     collection: Collection[T]
@@ -974,3 +984,158 @@ proc newAsyncMongoDatabase*(u: Uri, maxConnections = 16): Future[Database[AsyncM
     client.authenticated = authRes.any() do(x: bool) -> bool: x
 
 proc newAsyncMongoDatabase*(u: string, maxConnections = 16): Future[Database[AsyncMongo]] = newAsyncMongoDatabase(parseUri(u), maxConnections)
+
+# === GridFS API === #
+
+proc createBucket*(db: Database[Mongo], name: string): GridFs[Mongo] =
+  ## Create a grid-fs bucket collection name. Grid-fs actually just simply a collection consists of two
+  ## 1. <bucket-name>.files
+  ## 2. <nucket-name>.chunks
+  ## Hence creating bucket is creating two collections at the same time.
+  new result
+  result.name = name
+  let fcolname = name & ".files"
+  let ccolname = name & ".chunks"
+  let filecstat = db.createCollection(fcolname)
+  let chunkcstat = db.createCollection(ccolname)
+  if filecstat.ok and chunkcstat.ok:
+    result.files = db[fcolname]
+    result.chunks = db[ccolname]
+
+proc createBucket*(db: Database[AsyncMongo], name: string): Future[GridFs[AsyncMongo]]{.async.} =
+  ## Create a grid-fs bucket collection name async version
+  new result
+  result.name = name
+  let fcolname = name & ".files"
+  let ccolname = name & ".chunks"
+  let collops = @[
+    db.createCollection(fcolname),
+    db.createCollection(ccolname)
+  ]
+  let statR = await all(collops)
+  if statR.allIt( it.ok ):
+    result.files = db[fcolname]
+    result.chunks = db[ccolname]
+
+proc getBucket*[T: Mongo|AsyncMongo](db: Database[T], name: string): GridFs[T] =
+  ## Get the bucket (GridFS) instead of collection.
+  let fcolname = name & ".files"
+  let ccolname = name & ".chunks"
+  new result
+  result.files = db[fcolname]
+  result.chunks = db[ccolname]
+  result.name = name
+
+proc `$`*(g: GridFS): string =
+  #result = &"{g.files.db.name}.{g.name}"
+  result = g.name
+
+proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFs[T], f: AsyncFile, filename = "",
+  metadata = null(), chunksize = 255 * 1024): Future[bool] {.async, discardable.} =
+  ## Upload opened asyncfile with defined chunk size which defaulted at 255 KB
+  let foid = genoid()
+  let fsize = getFileSize f
+  let fileentry = %*{
+    "_id": foid,
+    "chunkSize": chunkSize,
+    "length": fsize,
+    "uploadDate": now().toTime.timeUTC,
+    "filename": filename,
+    "metadata": metadata
+  }
+  when T is Mongo:
+    let entrystatus = bucket.files.insert(fileentry)
+  else:
+    let entrystatus = await bucket.files.insert(fileentry)
+  if not entrystatus.ok:
+    echo &"cannot upload {filename}: {entrystatus.err}"
+    return
+
+  var chunkn = 0
+  for _ in countup(0, int(fsize-1), chunksize):
+    var chunk = %*{
+      "files_id": foid,
+      "n": chunkn
+    }
+    let data = await f.read(chunksize)
+    chunk["data"] = bin data
+    when T is Mongo:
+      let chunkstatus = bucket.chunks.insert(chunk)
+    else:
+      let chunkstatus = await bucket.chunks.insesrt(chunk)
+    if not chunkstatus.ok:
+      echo &"problem happened when uploading: {chunkstatus.err}"
+      return
+    inc chunkn
+  result = true
+
+proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string,
+  metadata = null(), chunksize = 255 * 1024): Future[bool] {.async, discardable.} =
+  ## A higher uploadFile which directly open and close file from filename.
+  var f: AsyncFile
+  try:
+    f = openAsync filename
+  except IOError:
+    echo getCurrentExceptionMsg()
+    return
+  defer: close f
+  
+  let (_, fname, ext) = splitFile filename
+  let m = newMimeTypes()
+  var filemetadata = metadata
+  if filemetadata.kind != BsonKindNull and filemetadata.kind == BsonKindDocument:
+    filemetadata["mime"] = m.getMimeType(ext).toBson
+    filemetadata["ext"] = ext.toBson
+  else:
+    filemetadata = %*{
+      "mime": m.getMimeType(ext),
+      "exit": ext
+    }
+  result = await bucket.uploadFile(f, fname & ext,
+    metadata = filemetadata, chunksize = chunksize)
+
+proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], f: AsyncFile,
+  filename = ""): Future[bool]
+  {.async, discardable.} =
+  ## Download given filename and write it to f asyncfile. This only download
+  ## the latest uploaded file in the same name.
+  let q = %*{ "filename": filename }
+  let uploadDesc = %*{ "uploadDate": -1 }
+  let fdata = bucket.files.find(q, @["_id", "length"]).orderBy(uploadDesc).one
+  if fdata.isNil:
+    echo &"cannot download {filename} to file: {getCurrentExceptionMsg()}"
+    return
+
+  let qchunk = %*{ "files_id": fdata["_id"] }
+  let fsize = fdata["length"].toInt
+  let selector = @["data"]
+  let sort = %* { "n": 1 }
+  var currsize = 0
+  var skipdoc = 0
+  while currsize < fsize:
+    var chunks = bucket.chunks.find(qchunk, selector).skip(skipdoc.int32).orderBy(sort).all()
+    skipdoc += chunks.len
+    for chunk in chunks:
+      let data = binstr chunk["data"]
+      currsize += data.len
+      await f.write(data)
+
+  if currsize < fsize:
+    echo &"incomplete file download; only at {currsize.float / fsize.float * 100}%"
+    return
+
+  result = true
+
+proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string):
+  Future[bool]{.async, discardable.} =
+  ## Higher version for downloadFile. Ensure the destination file path has
+  ## writing permission
+  var f: AsyncFile
+  try:
+    f = openAsync(filename, fmWrite)
+  except IOError:
+    echo getCurrentExceptionMsg()
+    return
+  defer: close f
+  let (dir, fname, ext) = splitFile filename
+  result = await bucket.downloadFile(f,  fname & ext)

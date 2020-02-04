@@ -2,6 +2,7 @@ import asyncdispatch
 import oids
 import strutils
 import times
+import os
 import unittest
 
 import nimongo/bson
@@ -10,10 +11,16 @@ import nimongo/mongo
 # TODO: unused
 import timeit
 
+{.hint[XDeclaredButNotUsed]: off.}
+{.warning[UnusedImport]: off.}
+
 const
   TestDB       = "testdb"
   TestSyncCol  = "sync"
   TestAsyncCol = "async"
+  blob {.strdefine.} : string = ""
+  bucket {.strdefine.}: string = "test_bucket"
+  upload {.strdefine.}: string = ""
 
 var
   sm: Mongo = newMongo()           ## Mongo synchronous client
@@ -391,6 +398,42 @@ suite "Mongo client querying test suite":
       ]
     )))
     check(waitFor(aco.find(%*{"label": "l"}).skip(3).all()).len() == 2)
+
+if blob == "":
+  echo()
+  echo "Cannot run test for GridFS."
+  echo "No file given, re-run with -d:blob=<your-blob-file-path>"
+  echo "to test uploading file add -d:upload=<target-file-path>."
+  echo "Optionally define the bucket name with -d:bucket=<bucket-name>, default 'test_bucket'"
+else:
+  suite "Mongo GridFS test suite":
+    var sbcon = newMongo()
+    require(sbcon.connect)
+    var sbdb = sbcon["temptest"]
+    var sbuck: GridFS[Mongo]
+    var abuck: GridFS[AsyncMongo]
+    test "[SYNC] Create Bucket":
+      sbuck = sbdb.createBucket(bucket)
+      let colllist = sbdb.listCollections
+      check(not sbuck.isNil)
+      check(($sbuck & ".files") in colllist)
+      check(($sbuck & ".chunks") in colllist)
+    test "[SYNC] Get the bucket":
+      sbuck = sbdb.getBucket(bucket)
+      check(not sbuck.isNil)
+      check(not sbuck.files.isNil)
+      check(not sbuck.chunks.isNil)
+    when upload != "":
+      test "[SYNC] Upload file":
+        let upsucc = waitFor sbuck.uploadFile(upload, chunksize = 1024 * 1024)
+        check upsucc
+    test "[SYNC] Download file":
+      var downfile = blob
+      if upload != "":
+        let (_, fname, ext) = splitFile upload
+        downfile = fname & ext
+      let downsucc = waitFor sbuck.downloadFile(downfile)
+      check downsucc
 
 echo ""
 
