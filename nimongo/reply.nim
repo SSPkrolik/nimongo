@@ -44,7 +44,7 @@ proc parseReplyErrmsg(reply: Bson, isRequired: bool): string {.raises: [ReplyFie
   ## Parse "errmsg" field in database reply.
   parseReplyField(val, "errmsg", ""):
     if val.kind == BsonKindStringUTF8:
-      result = val
+      result = val.toString
     else:
       result = ""
 

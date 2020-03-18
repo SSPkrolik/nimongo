@@ -47,18 +47,6 @@ const
     BsonSubtypeMd5*          = 0x05.BsonSubtype  ##
     BsonSubtypeUserDefined*  = 0x80.BsonSubtype  ##
 
-converter toChar*(bk: BsonKind): char =
-    ## Convert BsonKind to char
-    return bk.char
-
-converter toChar*(sub: BsonSubtype): char =
-    ## Convert BsonSubtype to char
-    return sub.char
-
-converter toBsonKind*(c: char): BsonKind =
-    ## Convert char to BsonKind
-    return c.BsonKind
-
 # ------------- type: Bson -----------------------#
 
 type
@@ -112,7 +100,7 @@ proc toBson*(x: Oid): Bson =
     ## Convert Mongo Object Id to Bson object
     return Bson(kind: BsonKindOid, valueOid: x)
 
-converter toOid*(x: Bson): Oid =
+proc toOid*(x: Bson): Oid =
     ## Convert Bson to Mongo Object ID
     return x.valueOid
 
@@ -120,7 +108,7 @@ proc toBson*(x: float64): Bson =
     ## Convert float64 to Bson object
     return Bson(kind: BsonKindDouble, valueFloat64: x)
 
-converter toFloat64*(x: Bson): float64 =
+proc toFloat64*(x: Bson): float64 =
     ## Convert Bson object to float64
     return x.valueFloat64
 
@@ -128,7 +116,7 @@ proc toBson*(x: string): Bson =
     ## Convert string to Bson object
     return Bson(kind: BsonKindStringUTF8, valueString: x)
 
-converter toString*(x: Bson): string =
+proc toString*(x: Bson): string =
     ## Convert Bson to UTF8 string
     case x.kind
     of BsonKindStringUTF8:
@@ -140,7 +128,7 @@ proc toBson*(x: int64): Bson =
     ## Convert int64 to Bson object
     return Bson(kind: BsonKindInt64, valueInt64: x)
 
-converter toInt64*(x: Bson): int64 =
+proc toInt64*(x: Bson): int64 =
     ## Convert Bson object to int
     case x.kind
     of BsonKindInt64:
@@ -154,7 +142,7 @@ proc toBson*(x: int32): Bson =
     ## Convert int32 to Bson object
     return Bson(kind: BsonKindInt32, valueInt32: x)
 
-converter toInt32*(x: Bson): int32 =
+proc toInt32*(x: Bson): int32 =
     ## Convert Bson to int32
     case x.kind
     of BsonKindInt64:
@@ -164,7 +152,7 @@ converter toInt32*(x: Bson): int32 =
     else:
         raiseWrongNodeException(x)
 
-converter toInt*(x: Bson): int =
+proc toInt*(x: Bson): int =
     ## Convert Bson to int whether it is int32 or int64
     case x.kind
     of BsonKindInt64:
@@ -182,7 +170,7 @@ proc toBson*(x: bool): Bson =
     ## Convert bool to Bson object
     return Bson(kind: BsonKindBool, valueBool: x)
 
-converter toBool*(x: Bson): bool =
+proc toBool*(x: Bson): bool =
     ## Convert Bson object to bool
     return x.valueBool
 
@@ -190,7 +178,7 @@ proc toBson*(x: Time): Bson =
     ## Convert Time to Bson object
     return Bson(kind: BsonKindTimeUTC, valueTime: x)
 
-converter toTime*(x: Bson): Time =
+proc toTime*(x: Bson): Time =
     ## Convert Bson object to Time
     return x.valueTime
 
@@ -198,7 +186,7 @@ proc toBson*(x: BsonTimestamp): Bson =
     ## Convert inner BsonTimestamp to Bson object
     return Bson(kind: BsonKindTimestamp, valueTimestamp: x)
 
-converter toTimestamp*(x: Bson): BsonTimestamp =
+proc toTimestamp*(x: Bson): BsonTimestamp =
     ## Convert Bson object to inner BsonTimestamp type
     return x.valueTimestamp
 
