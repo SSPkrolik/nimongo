@@ -443,13 +443,13 @@ iterator itemsForceSync*(f: Cursor[AsyncMongo]): Bson =
 
 proc isMaster*(sm: Mongo): bool =
   ## Perform query in order to check if connected Mongo instance is a master
-  return sm["admin"]["$cmd"].makeQuery(%*{"isMaster": 1}).one()["ismaster"]
+  return sm["admin"]["$cmd"].makeQuery(%*{"isMaster": 1}).one()["ismaster"].toBool
 
 proc isMaster*(am: AsyncMongo): Future[bool] {.async.} =
   ## Perform query in order to check if ocnnected Mongo instance is a master
   ## via async connection.
   let response = await am["admin"]["$cmd"].makeQuery(%*{"isMaster": 1}).one()
-  return response["ismaster"]
+  return response["ismaster"].toBool
 
 proc listDatabases*(sm: Mongo): seq[string] =
   ## Return list of databases on the server
@@ -494,7 +494,7 @@ proc listCollections*(db: Database[Mongo], filter: Bson = %*{}): seq[string] =
   let response = db["$cmd"].makeQuery(%*{"listCollections": 1'i32}).one()
   if response.isReplyOk:
     for col in response["cursor"]["firstBatch"]:
-      result.add(col["name"])
+      result.add(col["name"].toString)
 
 proc listCollections*(db: Database[AsyncMongo], filter: Bson = %*{}): Future[seq[string]] {.async.} =
   ## List collections inside specified database via async connection
@@ -503,7 +503,7 @@ proc listCollections*(db: Database[AsyncMongo], filter: Bson = %*{}): Future[seq
     response = await db["$cmd"].makeQuery(request).one()
   if response.isReplyOk:
     for col in response["cursor"]["firstBatch"]:
-      result.add(col["name"])
+      result.add(col["name"].toString)
 
 proc rename*(c: Collection[Mongo], newName: string, dropTarget: bool = false): StatusReply =
   ## Rename collection
@@ -933,7 +933,7 @@ proc authenticate*(db: Database[Mongo], username: string, password: string): boo
   if username == "" or password == "":
     return false
 
-  let nonce: string = db["$cmd"].makeQuery(%*{"getnonce": 1'i32}).one()["nonce"]
+  let nonce = db["$cmd"].makeQuery(%*{"getnonce": 1'i32}).one()["nonce"].toString
   let passwordDigest = $toMd5("$#:mongo:$#" % [username, password])
   let key = $toMd5("$#$#$#" % [nonce, username, passwordDigest])
   let request = %*{
