@@ -27,28 +27,28 @@ suite "BSON serializer/deserializer test suite":
       "int32": 5436'i32,
       "int64": 5436,
     }
-    check(doc["double"] == 5436.5436)
-    check(doc["stringkey"] == "stringvalue")
+    check(doc["double"].toFloat64 == 5436.5436)
+    check(doc["stringkey"].toString == "stringvalue")
     check doc["stringkey"] is Bson
-    check(doc["stringkey"].string == "stringvalue")
-    check(doc["document"]["double"] == 5436.5436)
-    check(doc["document"]["key"] == "value")
-    check(doc["array"][0] == 1'i64)
-    check(doc["int32"] == 5436'i32)
-    check(doc["int64"] == 5436'i64)
+    check(doc["stringkey"].toString == "stringvalue")
+    check(doc["document"]["double"].toFloat64 == 5436.5436)
+    check(doc["document"]["key"].toString == "value")
+    check(doc["array"][0].toInt64 == 1'i64)
+    check(doc["int32"].toInt32 == 5436'i32)
+    check(doc["int64"].toInt64 == 5436'i64)
 
   test "Document modification usin `[]=` operator":
     let doc = %*{
       "int32": 1'i32,
       "array": [1, 2, 3]
     }
-    check(doc["int32"] == 1'i32)
+    check(doc["int32"].toInt32 == 1'i32)
     doc["int32"] = toBson(2'i32)
-    check(doc["int32"] == 2'i32)
+    check(doc["int32"].toInt32 == 2'i32)
     doc["array"][0] = toBson(10'i32)
-    check(doc["array"][0] == 10'i32)
+    check(doc["array"][0].toInt32 == 10'i32)
     doc["newfield"] = "newvalue".toBson
-    check(doc["newfield"] == "newvalue")
+    check(doc["newfield"].toString == "newvalue")
 
 
   test "Check if document has specific field with `in` operator":
@@ -89,8 +89,8 @@ suite "BSON serializer/deserializer test suite":
     }
 
     let abm = merge(a, b)
-    check(abm["field0"] == 5'i32)
-    check(abm["field2"][0]["ar0"] == "1")
+    check(abm["field0"].toInt32 == 5'i32)
+    check(abm["field2"][0]["ar0"].toString == "1")
 
   test "Document update":
     let a = %*{
@@ -108,8 +108,8 @@ suite "BSON serializer/deserializer test suite":
     }
 
     b.update(a)
-    check(b["field0"] == 5'i32)
-    check(b["field2"][0]["ar0"] == "1")
+    check(b["field0"].toInt32 == 5'i32)
+    check(b["field2"][0]["ar0"].toString == "1")
 
   test "array length":
     let arr = newBsonArray()

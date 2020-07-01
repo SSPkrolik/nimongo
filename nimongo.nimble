@@ -1,11 +1,11 @@
 # Package
 description = "Pure Nim driver for MongoDB with support of synchronous and asynchronous I/O modes"
-version     = "0.2"
+version     = "0.3"
 license     = "MIT"
 author      = "Rostyslav Dzinko <rostislav.dzinko@gmail.com>"
 
 # Dependencies
-requires "scram >= 0.1.9"
+requires "scram >= 0.1.13"
 
 proc runTest(input: string) =
   let cmd = "nim c -r " & input

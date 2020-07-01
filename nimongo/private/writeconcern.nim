@@ -1,5 +1,5 @@
 # This module implements MongoDB WriteConcern support
-import bson
+import ../bson
 
 const Journaled*: bool = true
 
