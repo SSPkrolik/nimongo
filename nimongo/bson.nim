@@ -1,9 +1,7 @@
-import algorithm
 import base64
 import macros
 import md5
 import oids
-import sequtils
 import streams
 import strutils
 import times

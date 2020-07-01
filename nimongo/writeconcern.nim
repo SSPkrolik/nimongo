@@ -1,6 +1,4 @@
 # This module implements MongoDB WriteConcern support
-import strutils
-
 import bson
 
 const Journaled*: bool = true

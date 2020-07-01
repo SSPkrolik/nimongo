@@ -636,7 +636,6 @@ proc insert*(c: Collection[Mongo], documents: seq[Bson], ordered: bool = true, w
   # insert any missing _id fields
   #
   var inserted_ids: seq[Bson] = @[]
-  var id = ""
   for doc in documents:
     if not doc.contains("_id"):
       doc["_id"] = toBson(genOid())
@@ -667,7 +666,6 @@ proc insert*(c: Collection[AsyncMongo], documents: seq[Bson], ordered: bool = tr
   # insert any missing _id fields
   #
   var inserted_ids: seq[Bson] = @[]
-  var id = ""
   for doc in documents:
     if not doc.contains("_id"):
       doc["_id"] = toBson(genOid())
