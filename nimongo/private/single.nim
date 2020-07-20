@@ -44,7 +44,7 @@ proc newMongoWithURI*(u: Uri, maxConnections=16): Mongo =
 
 proc newMongoWithURI*(u: string, maxConnections=16): Mongo = newMongoWithURI(parseUri(u), maxConnections)
 
-proc authenticateScramSha1(db: Database[Mongo], username: string, password: string, ls: LockedSocket): bool {.discardable, gcsafe.}
+proc authenticateScramSha1(db: Database[Mongo], username: string, password: string, ls: LockedSocket): bool {.discardable.}
 proc acquire*(m: Mongo): LockedSocket =
   ## Retrieves next non-in-use socket for request
   while true:
@@ -164,7 +164,7 @@ proc one(f: Cursor[Mongo], ls: LockedSocket): Bson =
     raise newException(NotFound, "No documents matching query were found")
   return docs[0]
 
-proc authenticateScramSha1(db: Database[Mongo], username: string, password: string, ls: LockedSocket): bool {.discardable, gcsafe.} =
+proc authenticateScramSha1(db: Database[Mongo], username: string, password: string, ls: LockedSocket): bool {.discardable.} =
   ## Authenticate connection (sync): using SCRAM-SHA-1 auth method
   if username == "" or password == "":
     return false
