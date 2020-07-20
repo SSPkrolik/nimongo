@@ -14,33 +14,33 @@ const OP_MSG* =          2013'i32    ## OP_MSG operation code. Send a message us
 const HEADER_LENGTH* = 16'i32  ## Message Header size in bytes
 
 proc buildMessageHeader*(messageLength, requestId, responseTo: int32, opCode: int32, res: var string) =
-    ## Build Mongo message header as a series of bytes
-    int32ToBytes(messageLength+HEADER_LENGTH, res)
-    int32ToBytes(requestId, res)
-    int32ToBytes(responseTo, res)
-    int32ToBytes(opCode, res)
+  ## Build Mongo message header as a series of bytes
+  int32ToBytes(messageLength+HEADER_LENGTH, res)
+  int32ToBytes(requestId, res)
+  int32ToBytes(responseTo, res)
+  int32ToBytes(opCode, res)
 
 proc buildMessageQuery*(flags: int32, fullCollectionName: string, numberToSkip, numberToReturn: int32, res: var string) =
-    ## Build Mongo query message
-    int32ToBytes(flags, res)
-    res &= fullCollectionName
-    res &= char(0)
-    int32ToBytes(numberToSkip, res)
-    int32ToBytes(numberToReturn, res)
+  ## Build Mongo query message
+  int32ToBytes(flags, res)
+  res &= fullCollectionName
+  res &= char(0)
+  int32ToBytes(numberToSkip, res)
+  int32ToBytes(numberToReturn, res)
 
 proc buildMessageMore*(fullCollectionName: string, cursorId: int64, numberToReturn: int32, res: var string) =
-    ## Build Mongo get more message
-    int32ToBytes(0'i32, res)
-    res &= fullCollectionName
-    res &= char(0)
-    int32ToBytes(numberToReturn, res)
-    int64ToBytes(cursorId, res)
+  ## Build Mongo get more message
+  int32ToBytes(0'i32, res)
+  res &= fullCollectionName
+  res &= char(0)
+  int32ToBytes(numberToReturn, res)
+  int64ToBytes(cursorId, res)
 
 proc buildMessageKillCursors*(cursorIds: seq[int64], res: var string) =
-    ## Build Mongo kill cursors message
-    let ncursorIds: int32 = cursorIds.len().int32
-    if ncursorIds > 0:
-        int32ToBytes(0'i32, res)
-        int32ToBytes(ncursorIds, res)
-        for cursorId in cursorIds:
-            int64ToBytes(cursorId, res)
+  ## Build Mongo kill cursors message
+  let ncursorIds: int32 = cursorIds.len().int32
+  if ncursorIds > 0:
+    int32ToBytes(0'i32, res)
+    int32ToBytes(ncursorIds, res)
+    for cursorId in cursorIds:
+      int64ToBytes(cursorId, res)
