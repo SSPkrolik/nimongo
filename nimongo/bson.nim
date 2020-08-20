@@ -776,16 +776,23 @@ proc to*(b: Bson, T: typedesc): T =
         result = b.toBool
     elif T is enum:
         result = parseEnum[T](b.toString)
-    elif T is object|tuple|ref object:
-        when T is ref object:
-            if b.kind == BsonKindNull:
-                result = nil
-                return
-            result.new()
+    elif T is ref object:
+        if b.kind == BsonKindNull:
+            result = nil
+            return
+        result.new()
+        for k, val in fieldPairs(result[]):
+            var key = k
+            when val.hasCustomPragma(dbKey):
+                key = val.getCustomPragmaVal(dbKey)
+            if key notin b:
+                raise newException(Exception, "Key " & key & " not found for " & $T)
+            val = b[key].to(type(val))
+
+    elif T is object|tuple:
         for k, val in fieldPairs(result):
             var key = k
             when val.hasCustomPragma(dbKey):
-                static: echo "has pragma dbKey "
                 key = val.getCustomPragmaVal(dbKey)
             if key notin b:
                 raise newException(Exception, "Key " & key & " not found for " & $T)
@@ -798,11 +805,12 @@ proc toBson*[T](entry: T): Bson =
         result = newBsonArray()
         for v in entry:
             result.add(toBson(v))
-    elif T is object | tuple | ref object:
-        when T is ref object:
-            if entry.isNil:
-                result = null()
-                return
+    elif T is ref:
+        if entry.isNil:
+            result = null()
+        else:
+            result = entry[].toBson()
+    elif T is object | tuple:
         result = newBsonDocument()
         for k, v in fieldPairs(entry):
             when v.hasCustomPragma(dbKey):
@@ -820,7 +828,7 @@ proc toBson*[T](entry: T): Bson =
         for k, v in entry:
             result[k] = toBson(v)
     else:
-        {.error: "toBson " & T & " can't serialize".}
+        {.error: "toBson " & $T & " can't serialize".}
 
 proc merge*(a, b: Bson): Bson =
 
