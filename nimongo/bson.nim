@@ -788,13 +788,6 @@ proc to*(b: Bson, T: typedesc): T =
     else:
         {.error: "Unknown type".}
 
-#[
-    proc toBson*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =
-    ## Generic constructor for BSON data.
-    result = newBsonDocument()
-    for key, val in items(keyVals): result[key] = val
-]#
-
 proc toBson*[T](entry: T): Bson =
     when T is array | seq | set:
         result = newBsonArray()
