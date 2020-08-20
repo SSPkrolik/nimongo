@@ -442,15 +442,6 @@ proc `[]=`*(bs: Bson, key: int, value: Bson) =
     if bs.kind == BsonKindArray:
         bs.valueArray[key] = value
 
-proc toBson*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =
-    ## Generic constructor for BSON data.
-    result = newBsonDocument()
-    for key, val in items(keyVals): result[key] = val
-
-proc toBson*[T](vals: openArray[T]): Bson =
-    result = newBsonArray()
-    for val in vals: result.add(toBson(val))
-
 template toBson*(b: Bson): Bson = b
     ##
 
@@ -469,7 +460,7 @@ proc toBson(x: NimNode): NimNode {.compileTime.} =
     for i in 0 ..< x.len():
         x[i].expectKind(nnkExprColonExpr)
         result.add(newNimNode(nnkExprColonExpr).add(x[i][0]).add(toBson(x[i][1])))
-    result = newCall("toBson", result)
+    result = newCall("toBsonAUX", result)
 
   of nnkCurly:
     result = newCall("newBsonDocument")
@@ -750,6 +741,88 @@ proc initBsonDocument*(bytes: string): Bson {.deprecated.} =
 proc newBsonDocument*(bytes: string): Bson =
     ## Create new Bson document from byte string
     newBsonDocument(newStringStream(bytes))
+
+## Serialization/deserialization ext
+
+template dbKey*(name: string) {.pragma.}
+
+proc to*(b: Bson, T: typedesc): T =
+    when T is seq:
+        result.setLen(b.len)
+        var i = 0
+        for c in b:
+            result[i] = c.to(type(result[i]))
+            inc i
+    elif T is string:
+        result = b.toString
+    elif T is int|int8|int16|int32|uint|uint8|uint16|uint32:
+        when b.toInt is T:
+            result = b.toInt
+        else:
+            result = b.toInt.T
+    elif T is int64|uint64:
+        when b.toInt64 is T:
+            result = b.toInt64
+        else:
+            result = b.toInt64.T
+    elif T is float:
+        result = b.toFloat64
+    elif T is bool:
+        result = b.toBool
+    elif T is enum:
+        result = parseEnum[T](b.toString)
+    elif T is object|tuple|ref object:
+        when T is ref object:
+            if b.kind == BsonKindNull:
+                result = nil
+                return
+            result.new()
+        for k, val in fieldPairs(result):
+            var key = k
+            when val.hasCustomPragma(dbKey):
+                static: echo "has pragma dbKey "
+                key = val.getCustomPragmaVal(dbKey)
+            if key notin b:
+                raise newException(Exception, "Key " & key & " not found for " & $T)
+            val = b[key].to(type(val))
+    else:
+        {.error: "Unknown type".}
+
+#[
+    proc toBson*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =
+    ## Generic constructor for BSON data.
+    result = newBsonDocument()
+    for key, val in items(keyVals): result[key] = val
+]#
+
+proc toBson*[T](entry: T): Bson =
+    when T is array | seq | set:
+        result = newBsonArray()
+        for v in entry:
+            result.add(toBson(v))
+    elif T is object | tuple | ref object:
+        when T is ref object:
+            if entry.isNil:
+                result = null()
+                return
+        result = newBsonDocument()
+        for k, v in fieldPairs(entry):
+            when v.hasCustomPragma(dbKey):
+                result[v.getCustomPragmaVal(dbKey)] = toBson(v)
+            else:
+                result[k] = toBson(v)
+    elif T is enum:
+        result = toBson($entry)
+    elif T is int8|int16|uint8|uint16|uint32:
+        result = toBson(entry.int32)
+    elif T is uint64:
+        result = toBson(entry.int64)
+    elif T is Table|TableRef:
+        result = newBsonDocument()
+        for k, v in entry:
+            result[k] = toBson(v)
+    else:
+        {.error: "toBson " & T & " can't serialize".}
 
 proc merge*(a, b: Bson): Bson =
 
