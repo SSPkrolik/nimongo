@@ -445,9 +445,9 @@ proc `[]=`*(bs: Bson, key: int, value: Bson) =
 template toBson*(b: Bson): Bson = b
     ##
 
-proc toBsonAUX*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =	
+proc toBsonAUX*(keyVals: openArray[tuple[key: string, val: Bson]]): Bson =
     ## Generic constructor for BSON data.	
-    result = newBsonDocument()	
+    result = newBsonDocument()
     for key, val in items(keyVals): result[key] = val
 
 proc toBson(x: NimNode): NimNode {.compileTime.} =
