@@ -8,7 +8,6 @@ import streams
 import strutils
 import times
 import tables
-import typetraits
 
 # ------------- type: BsonKind -------------------#
 
