@@ -8,6 +8,7 @@ import streams
 import strutils
 import times
 import tables
+import typetraits
 
 # ------------- type: BsonKind -------------------#
 
@@ -776,6 +777,13 @@ proc to*(b: Bson, T: typedesc): T =
         result = b.toBool
     elif T is enum:
         result = parseEnum[T](b.toString)
+    elif T is TableRef|Table:
+        proc valAUXType[K, V](arr: Table[K, V] | TableRef[K, V]): V = discard
+        proc keyAUXType[K, V](arr: Table[K, V] | TableRef[K, V]): K = discard
+        when T is TableRef:
+            result = newTable[type(result.keyAUXType), type(result.valAUXType)]()
+        for k, v in b:
+            result[k] = v.to(type(result.valAUXType))
     elif T is ref object:
         if b.kind == BsonKindNull:
             result = nil
@@ -788,7 +796,6 @@ proc to*(b: Bson, T: typedesc): T =
             if key notin b:
                 raise newException(Exception, "Key " & key & " not found for " & $T)
             val = b[key].to(type(val))
-
     elif T is object|tuple:
         for k, val in fieldPairs(result):
             var key = k
@@ -797,6 +804,7 @@ proc to*(b: Bson, T: typedesc): T =
             if key notin b:
                 raise newException(Exception, "Key " & key & " not found for " & $T)
             val = b[key].to(type(val))
+
     else:
         {.error: "Unknown type".}
 
@@ -810,6 +818,10 @@ proc toBson*[T](entry: T): Bson =
             result = null()
         else:
             result = entry[].toBson()
+    elif T is Table|TableRef:
+        result = newBsonDocument()
+        for k, v in entry:
+            result[k] = toBson(v)
     elif T is object | tuple:
         result = newBsonDocument()
         for k, v in fieldPairs(entry):
@@ -823,10 +835,6 @@ proc toBson*[T](entry: T): Bson =
         result = toBson(entry.int32)
     elif T is uint64:
         result = toBson(entry.int64)
-    elif T is Table|TableRef:
-        result = newBsonDocument()
-        for k, v in entry:
-            result[k] = toBson(v)
     else:
         {.error: "toBson " & $T & " can't serialize".}
 
