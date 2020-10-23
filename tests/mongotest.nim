@@ -23,7 +23,7 @@ const
   upload {.strdefine.}: string = ""
 
 var
-  sm: Mongo = newMongo()           ## Mongo synchronous client
+  sm: Mongo = newMongo(maxConnections=2)           ## Mongo synchronous client
   am: AsyncMongo = newAsyncMongo() ## Mongo asynchronous client
 
 let
@@ -36,6 +36,7 @@ let
 require(sm.connect())
 require(waitFor(am.connect()))
 
+
 suite "Mongo instance administration commands test suite":
 
   echo "\n Mongo instance administration commands test suite\n"
@@ -45,8 +46,8 @@ suite "Mongo instance administration commands test suite":
 
   test "[ASYNC] [SYNC] Init":
     check:
-        sm.writeConcern["w"].toInt32() == writeConcernDefault()["w"].toInt32()
-        am.writeConcern["j"].toBool() == writeConcernDefault()["j"].toBool()
+      sm.writeConcern["w"].toInt32() == writeConcernDefault()["w"].toInt32()
+      am.writeConcern["j"].toBool() == writeConcernDefault()["j"].toBool()
 
   test "[ASYNC] [SYNC] Command: 'isMaster'":
     var m: bool
@@ -120,15 +121,17 @@ suite "Authentication":
 
   test "[ASYNC] [SYNC] Command: 'authenticate', method: 'SCRAM-SHA-1'":
     check(sdb.createUser("test1", "test"))
-    let authtestdb = newMongoDatabase("mongodb://test1:test@localhost:27017/testdb")
-    check($authtestdb == "testdb")
-    authtestdb[TestSyncCol].insert(%*{"data": "auth"})
+    let authtest = newMongoWithURI("mongodb://test1:test@localhost:27017/testdb")
+    check(authtest.authDb == TestDB)
+    authtest[TestDB][TestSyncCol].insert(%*{"data": "auth"})
+    check(authtest.authenticated == true)
     check(sdb.dropUser("test1"))
 
     check(waitFor(adb.createUser("test2", "test2")))
-    let authtestdb2 = waitFor(newAsyncMongoDatabase("mongodb://test2:test2@localhost:27017/testdb"))
-    check($authtestdb2 == "testdb")
-    discard waitFor(authtestdb2[TestAsyncCol].insert(%*{"data": "auth"}))
+    let authtest2 = newAsyncMongoWithURI("mongodb://test2:test2@localhost:27017/testdb")
+    check(authtest2.authDb == TestDB)
+    discard waitFor(authtest2[TestDB][TestAsyncCol].insert(%*{"data": "auth"}))
+    check(authtest2.authenticated == true)
     check(waitFor(adb.dropUser("test2")))
 
 suite "User Management":
@@ -314,14 +317,14 @@ suite "Mongo aggregation commands":
     sco.insert(@[%*{"i": 5}, %*{"i": 3}, %*{"i": 4}, %*{"i": 2}])
     let res = sco.find(%*{}).orderBy(%*{"i": 1}).all()
     check:
-      res[0]["i"] == 2
-      res[^1]["i"] == 5
+      res[0]["i"].toInt == 2
+      res[^1]["i"].toInt == 5
 
     discard waitFor(aco.insert(@[%*{"i": 5}, %*{"i": 3}, %*{"i": 4}, %*{"i": 2}]))
     let ares = waitFor(aco.find(%*{}).orderBy(%*{"i": 1}).all())
     check:
-      ares[0]["i"] == 2
-      ares[^1]["i"] == 5
+      ares[0]["i"].toInt == 2
+      ares[^1]["i"].toInt == 5
 
 
 suite "Mongo client querying test suite":
@@ -347,11 +350,19 @@ suite "Mongo client querying test suite":
     check(waitFor(aco.insert(@[%*{"string": "value"}, %*{"string": "value"}])))
     check(waitFor(aco.find(%*{"string": "value"}).all()).len() == 2)
 
-  test "[ N/A ] [SYNC] Query multiple documents as iterator":
+  test "[ASYNC] [SYNC] Query multiple documents as iterator":
     check(sco.insert(%*{"string": "hello"}))
     check(sco.insert(%*{"string": "hello"}))
     for document in sco.find(%*{"string": "hello"}).items():
-      check(document["string"] == "hello")
+      check(document["string"].toString == "hello")
+
+    check(waitFor(aco.insert(%*{"string": "hello"})))
+    check(waitFor(aco.insert(%*{"string": "hello"})))
+    proc testIterAsync() {.async.} =
+      let cur = aco.find(%*{"string": "hello"})
+      for document in cur:
+        check(document["string"].toString == "hello")
+    waitFor(testIterAsync())
 
   test "[ASYNC] [SYNC] Query multiple documents up to limit":
     check(sco.insert(
@@ -398,6 +409,153 @@ suite "Mongo client querying test suite":
       ]
     )))
     check(waitFor(aco.find(%*{"label": "l"}).skip(3).all()).len() == 2)
+
+suite "Mongo tailable cursor operations":
+
+  echo "\n Mongo tailable cursor operations\n"
+
+  setup:
+    discard sco.drop()
+    discard waitFor(aco.drop())
+    discard sdb["capped"].drop()
+    discard waitFor(adb["capped"].drop())
+
+  when not compileOption("threads"):
+    test "[ASYNC] [ SYNC ] Read  documents one by one in collection":
+      discard sdb.createCollection("capped", capped=true, maxSize=10000)
+      let sccoll = sdb["capped"]
+      let cur = sccoll.find(%*{"label": "t"}, maxTime=1500).tailableCursor().awaitData()
+      discard sccoll.insert(%*{"iter": 0.int32, "label": "t"})
+      var data: seq[Bson] = @[]
+      try:
+        data = cur.next()
+        check(data.len == 1)
+        check(data[0]["iter"].toInt32 == 0.int32)
+        discard sccoll.insert(%*{"iter": 1.int32, "label": "t"})
+        data = cur.next()
+        check(data.len == 1)
+        check(data[0]["iter"].toInt32 == 1.int32)
+        discard sccoll.insert(%*{"iter": 2.int32, "label": "t"})
+        data = cur.next()
+        check(data.len == 1)
+        check(data[0]["iter"].toInt32 == 2.int32)
+        discard sccoll.insert(%*{"iter": 3.int32, "label": "t"})
+        data = cur.next()
+        check(data.len == 1)
+        check(data[0]["iter"].toInt32 == 3.int32)
+        data = cur.next()
+        check(data.len == 0)
+      except OperationTimeout:
+        echo "Operation timed out"
+      discard sccoll.drop()
+
+      discard waitFor(adb.createCollection("capped", capped=true, maxSize=10000))
+      let accoll = adb["capped"]
+      discard waitFor(accoll.insert(%*{"iter": 0.int32, "label": "t1"}))
+
+      proc inserterAsync() {.async.} =
+        await sleepAsync(1)
+        discard await accoll.insert(%*{"iter": 1.int32, "label": "t1"})
+        discard await accoll.insert(%*{"iter": 2.int32, "label": "t1"})
+        await sleepAsync(0.5)
+        discard await accoll.insert(%*{"iter": 3.int32, "label": "t1"})
+      
+      proc readerAsync() {.async.} =
+        let cur = accoll.find(%*{"label": "t1"}, maxTime=1500).tailableCursor().awaitData()
+        var counter = 0
+        while counter < 4:
+          try:
+            let data = await cur.next()
+            if data.len > 0:
+              check(data[0]["iter"].toInt32 < 4.int32)
+              counter += 1
+          except OperationTimeout:
+            echo "Operation timed out"
+            break
+        try:
+          let data = await cur.next()
+          check(data.len == 0)
+        except OperationTimeout:
+          echo "Operation timed out"
+
+      proc testTailableAsync() {.async.} =
+        let fut = readerAsync()
+        await inserterAsync()
+        await fut
+      
+      waitFor(testTailableAsync())
+      discard waitFor(accoll.drop())
+  else:
+    test "[ASYNC] [SYNC] Read  documents from capped collection":
+      discard sdb.createCollection("capped", capped=true, maxSize=10000)
+      let sccoll = sdb["capped"] 
+      discard sccoll.insert(%*{"iter": 0.int32, "label": "t"})
+
+      proc inserterSync(sccoll: Collection[Mongo]) {.thread.} =
+        sleep(1000)
+        discard sccoll.insert(%*{"iter": 1.int32, "label": "t"})
+        discard sccoll.insert(%*{"iter": 2.int32, "label": "t"})
+        sleep(500)
+        discard sccoll.insert(%*{"iter": 3.int32, "label": "t"})
+
+      proc readerSync(sccoll: Collection[Mongo]) {.thread.} =
+        let cur = sccoll.find(%*{"label": "t"}, maxTime=1500).tailableCursor().awaitData()
+        var counter = 0
+        while counter < 4:
+          try:
+            let data = cur.next()
+            if data.len > 0:
+              check(data[0]["iter"].toInt32 < 4.int32)
+              counter += 1
+          except OperationTimeout:
+            echo "Operation timed out"
+            break
+        try:
+          let data = cur.next()
+          check(data.len == 0)
+        except OperationTimeout:
+          echo "Operation timed out"
+      
+      var thr: array[2, Thread[Collection[Mongo]]]
+      createThread[Collection[Mongo]](thr[1], readerSync, sccoll)
+      createThread[Collection[Mongo]](thr[0], inserterSync, sccoll)
+      joinThreads(thr)
+      discard sccoll.drop()
+      
+      discard waitFor(adb.createCollection("capped", capped=true, maxSize=10000))
+      let accoll = adb["capped"]
+      discard waitFor(accoll.insert(%*{"iter": 0.int32, "label": "t1"}))
+
+      proc inserterAsync() {.async.} =
+        await sleepAsync(1)
+        discard await accoll.insert(%*{"iter": 1.int32, "label": "t1"})
+        discard await accoll.insert(%*{"iter": 2.int32, "label": "t1"})
+        await sleepAsync(0.5)
+        discard await accoll.insert(%*{"iter": 3.int32, "label": "t1"})
+      
+      proc readerAsync() {.async.} =
+        let cur = accoll.find(%*{"label": "t1"}, maxTime=1500).tailableCursor().awaitData()
+        var counter = 0
+        while counter < 4:
+          try:
+            let data = await cur.next()
+            if data.len > 0:
+              check(data[0]["iter"].toInt32 < 4.int32)
+              counter += 1
+          except:
+            echo "Operation timed out"
+            break
+        let data = await cur.next()
+        check(data.len == 0)
+
+      proc testTailableAsync() {.async.} =
+        let fut = readerAsync()
+        await inserterAsync()
+        await fut
+      
+      waitFor(testTailableAsync())
+      discard waitFor(accoll.drop())
+
 
 if blob == "":
   echo()

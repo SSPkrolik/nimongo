@@ -6,6 +6,7 @@ bsontest
 query
 nimongotest
 profile_results.txt
+tests/nimongo
 *.save
 Contribute.md
 *.ilk

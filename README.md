@@ -224,11 +224,11 @@ This table represents MongoDB features and their implementation status within
 |Querying    |                 | __6__ / __10__     | __5__ / __9__      | |
 |            | Find one        | :white_check_mark: | :white_check_mark: | |
 |            | Find all        | :white_check_mark: | :white_check_mark: | |
-|            | Find iterator   | :white_check_mark: | __N/A__            | |
+|            | Find iterator   | :white_check_mark: | :white_check_mark: | |
 |            | Skip            | :white_check_mark: | :white_check_mark: | |
 |            | Limit           | :white_check_mark: | :white_check_mark: | |
 |            | Count           | :white_check_mark: | :white_check_mark: | |
-|            | Tailable        | :red_circle:       | :red_circle:       | |
+|            | Tailable        | :white_check_mark: | :white_check_mark: | |
 |            | Partial         | :red_circle:       | :red_circle:       | |
 |            | FindAndModify   | :red_circle:       | :red_circle:       | |
 |            | parallelCollectionScan | :red_circle:| :red_circle:       | |

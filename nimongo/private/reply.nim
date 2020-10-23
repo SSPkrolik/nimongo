@@ -1,5 +1,5 @@
-import bson
-import errors
+import ../bson
+import ./errors
 
 type StatusReply* = object  ## Database Reply
     ok*: bool
