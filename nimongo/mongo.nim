@@ -720,33 +720,39 @@ proc update*(c: Collection[AsyncMongo], selector: Bson, update: Bson, multi: boo
 # Find and modify API  #
 # ==================== #
 
-proc findAndModify*(c: Collection[Mongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
+proc findAndModify*(c: Collection[Mongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil, remove: bool = false): Future[StatusReply] {.async.} =
   ## Finds and modifies MongoDB document
   let request = %*{
     "findAndModify": c.name,
     "query": selector,
-    "update": update,
     "new": afterUpdate,
     "upsert": upsert,
     "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
   }
   if not sort.isNil:
     request["sort"] = sort
+  if remove:
+    request["remove"] = remove.toBson()
+  else:
+    request["update"] = update
   let response = c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply
 
-proc findAndModify*(c: Collection[AsyncMongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil): Future[StatusReply] {.async.} =
+proc findAndModify*(c: Collection[AsyncMongo], selector: Bson, sort: Bson, update: Bson, afterUpdate: bool, upsert: bool, writeConcern: Bson = nil, remove: bool = false): Future[StatusReply] {.async.} =
   ## Finds and modifies MongoDB document via async connection
   let request = %*{
     "findAndModify": c.name,
     "query": selector,
-    "update": update,
     "new": afterUpdate,
     "upsert": upsert,
     "writeConcern": if writeConcern == nil.Bson: c.client.writeConcern else: writeConcern
   }
   if not sort.isNil:
     request["sort"] = sort
+  if remove:
+    request["remove"] = remove.toBson()
+  else:
+    request["update"] = update
   let response = await c.db["$cmd"].makeQuery(request).one()
   return response.toStatusReply
 
