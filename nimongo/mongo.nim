@@ -597,8 +597,7 @@ proc `$`*(g: GridFS): string =
   #result = &"{g.files.db.name}.{g.name}"
   result = g.name
 
-proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFs[T], f: AsyncFile, filename = "",
-  metadata = null(), chunksize = 255 * 1024): Future[bool] {.async, discardable.} =
+proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFs[T], f: AsyncFile, filename = "", metadata = null(), chunksize = 255 * 1024): Future[bool] {.async.} =
   ## Upload opened asyncfile with defined chunk size which defaulted at 255 KB
   let foid = genoid()
   let fsize = getFileSize f
@@ -636,8 +635,7 @@ proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFs[T], f: AsyncFile, filename 
     inc chunkn
   result = true
 
-proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string,
-  metadata = null(), chunksize = 255 * 1024): Future[bool] {.async, discardable.} =
+proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string, metadata = null(), chunksize = 255 * 1024): Future[bool] {.async.} =
   ## A higher uploadFile which directly open and close file from filename.
   var f: AsyncFile
   try:
@@ -661,9 +659,7 @@ proc uploadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string,
   result = await bucket.uploadFile(f, fname & ext,
     metadata = filemetadata, chunksize = chunksize)
 
-proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], f: AsyncFile,
-  filename = ""): Future[bool]
-  {.async, discardable.} =
+proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], f: AsyncFile, filename = ""): Future[bool] {.async} =
   ## Download given filename and write it to f asyncfile. This only download
   ## the latest uploaded file in the same name.
   let q = %*{ "filename": filename }
@@ -693,8 +689,7 @@ proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], f: AsyncFile,
 
   result = true
 
-proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string):
-  Future[bool]{.async, discardable.} =
+proc downloadFile*[T: Mongo|AsyncMongo](bucket: GridFS[T], filename: string): Future[bool]{.async.} =
   ## Higher version for downloadFile. Ensure the destination file path has
   ## writing permission
   var f: AsyncFile
