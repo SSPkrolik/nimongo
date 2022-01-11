@@ -1,6 +1,6 @@
 # Package
 description = "Pure Nim driver for MongoDB with support of synchronous and asynchronous I/O modes"
-version     = "0.3"
+version     = "0.3.1"
 license     = "MIT"
 author      = "Rostyslav Dzinko <rostislav.dzinko@gmail.com>"
 
